@@ -7,20 +7,24 @@ include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-add_executable(euclidian src/euclidian_extraction.cpp)
-target_link_libraries(euclidian ${PCL_LIBRARIES})
+function(demo name)
+	add_executable(${name} src/${name}.cpp)
+	#add_dependencies(${name} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+	target_link_libraries(${name} ${PCL_LIBRARIES}) #${catkin_LIBRARIES}
+	#target_include_directories(${name} SYSTEM PUBLIC ${catkin_INCLUDE_DIRS})
+	# set_target_properties(${name} PROPERTIES OUTPUT_NAME ${name} PREFIX "")
+	# install(TARGETS ${name}
+		# ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+		# LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+		# RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+	# )
+endfunction()
 
-add_executable(color_based src/color_based.cpp)
-target_link_libraries(color_based ${PCL_LIBRARIES})
-
-add_executable(plane src/plane.cpp)
-target_link_libraries(plane ${PCL_LIBRARIES})
-
-add_executable(3d_recognition src/3d_recognition.cpp)
-target_link_libraries(3d_recognition ${PCL_LIBRARIES})
-
-add_executable(region_growing src/region_growing.cpp)
-target_link_libraries(region_growing ${PCL_LIBRARIES})
-
-add_executable(moment_of_inertia src/moment_of_inertia.cpp)
-target_link_libraries(moment_of_inertia ${PCL_LIBRARIES})
+demo (euclidian_extraction)
+demo (color_based)
+demo (plane)
+demo (3d_recognition)
+demo (region_growing)
+demo (moment_of_inertia)
+demo (cylinder_segmentation)
+demo (pallet)
