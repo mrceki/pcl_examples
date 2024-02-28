@@ -10,6 +10,7 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/visualization/cloud_viewer.h>
+#include <pcl/filters/passthrough.h>
 #include <pcl/ml/kmeans.h>
 #include <yaml-cpp/yaml.h>
 
@@ -21,11 +22,14 @@ public:
     pcl::Kmeans::Centroids centroids;
     std::vector<pcl::PointIndices> cluster_indices;
     std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> clusters;
+    pcl::visualization::PCLVisualizer::Ptr viewer;
+    int cluster_i, centroid_i;
     PointCloudAnalyzer() : cloud(new pcl::PointCloud<pcl::PointXYZ>),
                            cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>),
                            coefficients(new pcl::ModelCoefficients),
                            inliers(new pcl::PointIndices),
-                           tree(new pcl::search::KdTree<pcl::PointXYZ>)
+                           tree(new pcl::search::KdTree<pcl::PointXYZ>),
+                           viewer(new pcl::visualization::PCLVisualizer("Cluster Viewer"))
     {
     }
 
@@ -47,12 +51,26 @@ public:
         int min_cluster_size;
         int max_cluster_size;
     };
+
+    struct FilterField
+    {
+        std::string field;
+        float limit_min;
+        float limit_max;
+    };
+    
+    struct PassThroughFilterParams
+    {
+        std::vector<FilterField> filter_fields;
+    };
+
     struct Parameters
     {
         std::string pcd_filepath;
         SACParams sac_params;
         SACParams cluster_sac_params;
         EuclideanClusterParams ec_params;
+        PassThroughFilterParams passthrough_filter_params;
         float downsample_leaf_size;
         int kmeans_cluster_size;
         int visualization_point_size;
@@ -165,6 +183,7 @@ public:
         }
     }
 
+    
     void performKMeans(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, int cluster_size)
     {
         pcl::Kmeans kmeans(point_cloud->size(), 3);
@@ -189,22 +208,34 @@ public:
         }
     }
 
+    void filterCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, PassThroughFilterParams params)
+    {
+        for (const auto &filterField : params.filter_fields)
+        {
+            pass.setInputCloud(point_cloud);
+            pass.setFilterFieldName(filterField.field);
+            pass.setFilterLimits(filterField.limit_min, filterField.limit_max);
+            pass.filter(*point_cloud);
+        }
+    }
+
     void visualizeCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, pcl::Kmeans::Centroids centroids, int point_size = 3)
     {
-        pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("Cluster Viewer"));
-
         for (int i = 0; i < centroids.size(); i++)
         {
             pcl::PointCloud<pcl::PointXYZ>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZ>);
             cluster->points.push_back(pcl::PointXYZ(centroids[i][0], centroids[i][1], centroids[i][2]));
             std::stringstream ss;
-            ss << "centroid_" << i;
+            ss << "centroid_" << centroid_i;
+            centroid_i++;
             viewer->addPointCloud<pcl::PointXYZ>(cluster, ss.str());
             viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size * 3, ss.str());
         }
-
-        viewer->addPointCloud<pcl::PointXYZ>(point_cloud);
-        viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size);
+        std::stringstream ss;
+        ss << "cluster_" << cluster_i;
+        cluster_i++;
+        viewer->addPointCloud<pcl::PointXYZ>(point_cloud, ss.str());
+        viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size, ss.str());
         viewer->spin();
         std::cout << "Cluster visualization completed." << std::endl;
     }
@@ -233,8 +264,20 @@ public:
                                const std::string &yaml_file)
     {
         YAML::Node config = YAML::LoadFile(yaml_file);
+        YAML::Node filterFieldsNode = config["filter_fields"];
 
         params.pcd_filepath = config["pcd_filepath"].as<std::string>();
+
+        for (const auto& fieldNode : filterFieldsNode)
+        {
+            PointCloudAnalyzer::FilterField filterField;
+            filterField.field = fieldNode["name"].as<std::string>();
+            filterField.limit_min = fieldNode["limit_min"].as<float>();
+            filterField.limit_max = fieldNode["limit_max"].as<float>();
+
+            params.passthrough_filter_params.filter_fields.push_back(filterField);
+        }
+
         params.downsample_leaf_size = config["downsample_leaf_size"].as<float>();
         params.kmeans_cluster_size = config["kmeans_cluster_size"].as<int>();
         params.visualization_point_size = config["visualization_point_size"].as<int>();
@@ -258,7 +301,7 @@ public:
 
         params.ec_params.cluster_tolerance = config["ec_params"]["cluster_tolerance"].as<float>();
         params.ec_params.min_cluster_size = config["ec_params"]["min_cluster_size"].as<int>();
-        params.ec_params.max_cluster_size = config["ec_params"]["max_cluster_size"].as<int>();
+        params.ec_params.max_cluster_size = config["ec_params"]["max_cluster_size"].as<int>();        
         std::cout << "filepath: " << params.pcd_filepath << std::endl;
     }
 
@@ -269,12 +312,13 @@ private:
     pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
     pcl::SACSegmentation<pcl::PointXYZ> seg;
     pcl::VoxelGrid<pcl::PointXYZ> vg;
-    pcl::visualization::PCLVisualizer::Ptr viewer;
     pcl::PCDWriter writer;
     pcl::ModelCoefficients::Ptr coefficients;
     pcl::PointIndices::Ptr inliers;
     pcl::ExtractIndices<pcl::PointXYZ> extract;
+    pcl::PassThrough<pcl::PointXYZ> pass;
 };
+
 
 int main()
 {
@@ -292,6 +336,8 @@ int main()
 
     pcl.loadPCD(params.pcd_filepath);
     std::cout << "PointCloud loaded." << std::endl;
+
+    pcl.filterCloud(pcl.cloud, params.passthrough_filter_params);
 
     pcl.downsample(pcl.cloud, params.downsample_leaf_size);
     pcl.segmentPlane(pcl.cloud, params.sac_params);
