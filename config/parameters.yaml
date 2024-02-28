@@ -1,0 +1,60 @@
+pcd_filepath: "/home/cenk/pcl_examples/clouds/euro_pallet.pcd"
+
+sac_params:
+  optimize_coefficients: true
+  model_type: 0
+  method_type: 0
+  distance_threshold: 0.01
+  max_iterations: 100
+  filtering: true
+  min_indices: 200
+  is_cloud_clustered: false
+
+cluster_sac_params:
+  optimize_coefficients: true
+  model_type: 0
+  method_type: 0
+  distance_threshold: 0.02
+  max_iterations: 100
+  filtering: false
+  min_indices: 200
+  is_cloud_clustered: true
+
+ec_params:
+  cluster_tolerance: 0.015
+  min_cluster_size: 50
+  max_cluster_size: 25000
+
+downsample_leaf_size: 0.01
+kmeans_cluster_size: 2
+visualization_point_size: 3
+
+# The following models are supported:
+
+# SACMODEL_PLANE - used to determine plane models. The four coefficients of the plane are its Hessian Normal form: [normal_x normal_y normal_z d]
+# SACMODEL_LINE - used to determine line models. The six coefficients of the line are given by a point on the line and the direction of the line as: [point_on_line.x point_on_line.y point_on_line.z line_direction.x line_direction.y line_direction.z]
+# SACMODEL_CIRCLE2D - used to determine 2D circles in a plane. The circle's three coefficients are given by its center and radius as: [center.x center.y radius]
+# SACMODEL_CIRCLE3D - used to determine 3D circles in a plane. The circle's seven coefficients are given by its center, radius and normal as: [center.x, center.y, center.z, radius, normal.x, normal.y, normal.z]
+# SACMODEL_SPHERE - used to determine sphere models. The four coefficients of the sphere are given by its 3D center and radius as: [center.x center.y center.z radius]
+# SACMODEL_CYLINDER - used to determine cylinder models. The seven coefficients of the cylinder are given by a point on its axis, the axis direction, and a radius, as: [point_on_axis.x point_on_axis.y point_on_axis.z axis_direction.x axis_direction.y axis_direction.z radius]
+# SACMODEL_CONE - used to determine cone models. The seven coefficients of the cone are given by a point of its apex, the axis direction and the opening angle, as: [apex.x, apex.y, apex.z, axis_direction.x, axis_direction.y, axis_direction.z, opening_angle]
+# SACMODEL_TORUS - not implemented yet
+# SACMODEL_PARALLEL_LINE - a model for determining a line parallel with a given axis, within a maximum specified angular deviation. The line coefficients are similar to SACMODEL_LINE .
+# SACMODEL_PERPENDICULAR_PLANE - a model for determining a plane perpendicular to a user-specified axis, within a maximum specified angular deviation. The plane coefficients are similar to SACMODEL_PLANE .
+# SACMODEL_PARALLEL_LINES - not implemented yet
+# SACMODEL_NORMAL_PLANE - a model for determining plane models using an additional constraint: the surface normals at each inlier point has to be parallel to the surface normal of the output plane, within a maximum specified angular deviation. The plane coefficients are similar to SACMODEL_PLANE .
+# SACMODEL_NORMAL_SPHERE - similar to SACMODEL_SPHERE , but with additional surface normal constraints.
+# SACMODEL_PARALLEL_PLANE - a model for determining a plane parallel to a user-specified axis, within a maximum specified angular deviation. The plane coefficients are similar to SACMODEL_PLANE .
+# SACMODEL_NORMAL_PARALLEL_PLANE defines a model for 3D plane segmentation using additional surface normal constraints. The plane normal must lie parallel to a user-specified axis. SACMODEL_NORMAL_PARALLEL_PLANE therefore is equivalent to SACMODEL_NORMAL_PLANE + SACMODEL_PERPENDICULAR_PLANE. The plane coefficients are similar to SACMODEL_PLANE .
+# SACMODEL_STICK - a model for 3D stick segmentation. A stick is a line with a user given minimum/maximum width.
+# SACMODEL_ELLIPSE3D - used to determine 3D ellipses in a plane. The ellipses's eleven coefficients are given by its center and radius as: [center.x, center.y, center.z, semi_axis.u, semi_axis.v, normal.x, normal.y, normal.z, u.x, u.y, u.z]
+# The following list describes the robust sample consensus estimators implemented:
+
+# SAC_RANSAC - RANdom SAmple Consensus
+# SAC_LMEDS - Least Median of Squares
+# SAC_MSAC - M-Estimator SAmple Consensus
+# SAC_RRANSAC - Randomized RANSAC
+# SAC_RMSAC - Randomized MSAC
+# SAC_MLESAC - Maximum LikeLihood Estimation SAmple Consensus
+# SAC_PROSAC - PROgressive SAmple Consensus
+# By default, if you're not familiar with most of the above estimators and how they operate, use RANSAC to test your hypotheses.

@@ -11,6 +11,7 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/ml/kmeans.h>
+#include <yaml-cpp/yaml.h>
 
 class PointCloudAnalyzer
 {
@@ -20,7 +21,6 @@ public:
     pcl::Kmeans::Centroids centroids;
     std::vector<pcl::PointIndices> cluster_indices;
     std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> clusters;
-
     PointCloudAnalyzer() : cloud(new pcl::PointCloud<pcl::PointXYZ>),
                            cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>),
                            coefficients(new pcl::ModelCoefficients),
@@ -46,6 +46,16 @@ public:
         float cluster_tolerance;
         int min_cluster_size;
         int max_cluster_size;
+    };
+    struct Parameters
+    {
+        std::string pcd_filepath;
+        SACParams sac_params;
+        SACParams cluster_sac_params;
+        EuclideanClusterParams ec_params;
+        float downsample_leaf_size;
+        int kmeans_cluster_size;
+        int visualization_point_size;
     };
 
     void loadPCD(const std::string &filename)
@@ -152,7 +162,6 @@ public:
                 clusters.push_back(cloud_cluster);
                 std::cout << "Cluster Pushed" << std::endl;
             }
-
         }
     }
 
@@ -220,6 +229,39 @@ public:
         std::cout << "Cluster writing completed." << std::endl;
     }
 
+    void setParametersFromYAML(PointCloudAnalyzer::Parameters &params,
+                               const std::string &yaml_file)
+    {
+        YAML::Node config = YAML::LoadFile(yaml_file);
+
+        params.pcd_filepath = config["pcd_filepath"].as<std::string>();
+        params.downsample_leaf_size = config["downsample_leaf_size"].as<float>();
+        params.kmeans_cluster_size = config["kmeans_cluster_size"].as<int>();
+        params.visualization_point_size = config["visualization_point_size"].as<int>();
+
+        params.sac_params.optimize_coefficients = config["sac_params"]["optimize_coefficients"].as<bool>();
+        params.sac_params.model_type = config["sac_params"]["model_type"].as<int>();
+        params.sac_params.method_type = config["sac_params"]["method_type"].as<int>();
+        params.sac_params.max_iterations = config["sac_params"]["max_iterations"].as<int>();
+        params.sac_params.distance_threshold = config["sac_params"]["distance_threshold"].as<float>();
+        params.sac_params.filtering = config["sac_params"]["filtering"].as<bool>();
+        params.sac_params.min_indices = config["sac_params"]["min_indices"].as<int>();
+
+        params.cluster_sac_params.optimize_coefficients = config["cluster_sac_params"]["optimize_coefficients"].as<bool>();
+        params.cluster_sac_params.model_type = config["cluster_sac_params"]["model_type"].as<int>();
+        params.cluster_sac_params.method_type = config["cluster_sac_params"]["method_type"].as<int>();
+        params.cluster_sac_params.distance_threshold = config["cluster_sac_params"]["distance_threshold"].as<float>();
+        params.cluster_sac_params.max_iterations = config["cluster_sac_params"]["max_iterations"].as<int>();
+        params.cluster_sac_params.filtering = config["cluster_sac_params"]["filtering"].as<bool>();
+        params.cluster_sac_params.min_indices = config["cluster_sac_params"]["min_indices"].as<int>();
+        params.cluster_sac_params.is_cloud_clustered = config["cluster_sac_params"]["is_cloud_clustered"].as<bool>();
+
+        params.ec_params.cluster_tolerance = config["ec_params"]["cluster_tolerance"].as<float>();
+        params.ec_params.min_cluster_size = config["ec_params"]["min_cluster_size"].as<int>();
+        params.ec_params.max_cluster_size = config["ec_params"]["max_cluster_size"].as<int>();
+        std::cout << "filepath: " << params.pcd_filepath << std::endl;
+    }
+
 private:
     pcl::PCDReader reader;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered;
@@ -237,43 +279,33 @@ private:
 int main()
 {
     PointCloudAnalyzer pcl;
+    PointCloudAnalyzer::Parameters params;
 
-    pcl.loadPCD("/home/cenk/pcl_examples/clouds/euro_pallet.pcd");
+    try
+    {
+        pcl.setParametersFromYAML(params, "/home/cenk/pcl_examples/config/parameters.yaml");
+    }
+    catch (const YAML::Exception &e)
+    {
+        std::cerr << "YAML parsing error: " << e.what() << std::endl;
+    }
+
+    pcl.loadPCD(params.pcd_filepath);
     std::cout << "PointCloud loaded." << std::endl;
 
-    pcl.downsample(pcl.cloud, 0.01f);
-
-    PointCloudAnalyzer::SACParams sac_params;
-    sac_params.optimize_coefficients = true;
-    sac_params.model_type = pcl::SACMODEL_PLANE;
-    sac_params.method_type = pcl::SAC_RANSAC;
-    sac_params.max_iterations = 100;
-    sac_params.distance_threshold = 0.01;
-    sac_params.filtering = true;
-    sac_params.min_indices = 200;
-    pcl.segmentPlane(pcl.cloud, sac_params);
-
+    pcl.downsample(pcl.cloud, params.downsample_leaf_size);
+    pcl.segmentPlane(pcl.cloud, params.sac_params);
     std::cout << "PointCloud representing the planar component: " << pcl.cloud->size() << " data points." << std::endl;
 
-    PointCloudAnalyzer::EuclideanClusterParams ec_params;
-    ec_params.cluster_tolerance = 0.015;
-    ec_params.min_cluster_size = 50;
-    ec_params.max_cluster_size = 25000;
-    pcl.extractClusters(pcl.cloud, ec_params);
-
-    pcl.createNewCloudFromIndicies(pcl.cluster_indices, pcl.cloud_cluster, 200);
-
-    sac_params.distance_threshold = 0.02;
-    sac_params.filtering = false;
-    sac_params.is_cloud_clustered = true;
+    pcl.extractClusters(pcl.cloud, params.ec_params);
+    pcl.createNewCloudFromIndicies(pcl.cluster_indices, pcl.cloud_cluster, params.sac_params.min_indices);
 
     for (const auto &cluster : pcl.clusters)
     {
         std::cout << "Cluster size: " << cluster->size() << std::endl;
-
-        pcl.segmentPlane(cluster, sac_params);
-        pcl.performKMeans(cluster, 2);
-        pcl.visualizeCluster(cluster, pcl.centroids, 3);
+        pcl.segmentPlane(cluster, params.cluster_sac_params);
+        pcl.performKMeans(cluster, params.kmeans_cluster_size);
+        pcl.visualizeCluster(cluster, pcl.centroids, params.visualization_point_size);
     }
 
     return 0;
