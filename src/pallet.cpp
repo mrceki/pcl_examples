@@ -18,25 +18,27 @@ public:
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster;
     pcl::Kmeans::Centroids centroids;
-
+    std::vector<pcl::PointIndices> cluster_indices;
+    std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> clusters;
 
     PointCloudAnalyzer() : cloud(new pcl::PointCloud<pcl::PointXYZ>),
-                           cloud_cluster(new pcl::PointCloud<pcl::PointXYZ>),
                            cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>),
                            coefficients(new pcl::ModelCoefficients),
                            inliers(new pcl::PointIndices),
-                           tree(new pcl::search::KdTree<pcl::PointXYZ>),
-                           viewer(new pcl::visualization::PCLVisualizer("Cluster viewer"))
+                           tree(new pcl::search::KdTree<pcl::PointXYZ>)
     {
     }
 
     struct SACParams
     {
         bool optimize_coefficients;
+        bool filtering;
+        bool is_cloud_clustered;
         int model_type;
         int method_type;
         float distance_threshold;
         int max_iterations;
+        int min_indices;
     };
 
     struct EuclideanClusterParams
@@ -53,12 +55,12 @@ public:
         std::cout << "Loaded " << cloud->size() << " data points from " << filename << std::endl;
     }
 
-    void downsample(float leaf_size)
+    void downsample(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, float leaf_size)
     {
-        vg.setInputCloud(cloud);
+        vg.setInputCloud(point_cloud);
         vg.setLeafSize(leaf_size, leaf_size, leaf_size);
-        vg.filter(*cloud);
-        std::cout << "PointCloud after filtering has: " << cloud->size() << " data points." << std::endl; //*
+        vg.filter(*point_cloud);
+        std::cout << "PointCloud after filtering has: " << point_cloud->size() << " data points." << std::endl; //*
     }
 
     void segmentPlane(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, SACParams params)
@@ -70,7 +72,28 @@ public:
         seg.setMaxIterations(params.max_iterations);
 
         int nr_points = (int)point_cloud->size();
-        while (point_cloud->size() > 0.3 * nr_points)
+        if (!params.is_cloud_clustered)
+        {
+            while (point_cloud->size() > 0.3 * nr_points)
+            {
+                seg.setInputCloud(point_cloud);
+                seg.segment(*inliers, *coefficients);
+                std::cout << "Segmented cloud size: " << inliers->indices.size() << std::endl;
+                if (inliers->indices.size() == 0)
+                {
+                    std::cout << "Could not estimate a planar model for the given dataset." << std::endl;
+                    break;
+                }
+
+                extract.setInputCloud(point_cloud);
+                extract.setIndices(inliers);
+                extract.setNegative(params.filtering);
+
+                extract.filter(*cloud_filtered);
+                *point_cloud = *cloud_filtered;
+            }
+        }
+        else
         {
             seg.setInputCloud(point_cloud);
             seg.segment(*inliers, *coefficients);
@@ -78,31 +101,59 @@ public:
             if (inliers->indices.size() == 0)
             {
                 std::cout << "Could not estimate a planar model for the given dataset." << std::endl;
-                break;
             }
+            else if (inliers->indices.size() < params.min_indices)
+            {
+                std::cout << "Not enough points to estimate a planar model for the given dataset." << std::endl;
+            }
+            else
+            {
+                extract.setInputCloud(point_cloud);
+                extract.setIndices(inliers);
+                extract.setNegative(params.filtering);
 
-            extract.setInputCloud(point_cloud);
-            extract.setIndices(inliers); //
-            extract.setNegative(false);  // Extract the planar inliers from the input cloud
-            extract.filter(*point_cloud);
-
-            extract.setNegative(true); // Remove the planar inliers, extract the rest
-            extract.filter(*cloud_filtered);
-            *point_cloud = *cloud_filtered;
+                extract.filter(*cloud_filtered);
+                *point_cloud = *cloud_filtered;
+            }
         }
         std::cout << "Plane segmentation completed." << std::endl;
     }
 
-    void extractClusters(EuclideanClusterParams params)
+    void extractClusters(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, EuclideanClusterParams params)
     {
-        tree->setInputCloud(cloud);
+        tree->setInputCloud(point_cloud);
         ec.setClusterTolerance(params.cluster_tolerance);
         ec.setMinClusterSize(params.min_cluster_size);
         ec.setMaxClusterSize(params.max_cluster_size);
         ec.setSearchMethod(tree);
-        ec.setInputCloud(cloud);
+        ec.setInputCloud(point_cloud);
         ec.extract(cluster_indices);
+        std::cout << "cluster_indices size: " << cluster_indices.size() << std::endl;
         std::cout << "Cluster extraction completed." << std::endl;
+    }
+    void createNewCloudFromIndicies(std::vector<pcl::PointIndices> cluster_indices, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster, int min_indices = 100)
+    {
+        std::cout << "Creating new cloud from indices" << std::endl;
+        std::cout << "cluster_indices size: " << cluster_indices.size() << std::endl;
+
+        for (const auto &cluster : cluster_indices)
+        {
+            cloud_cluster.reset(new pcl::PointCloud<pcl::PointXYZ>);
+            std::cout << "Cluster Started" << std::endl;
+            for (const auto &idx : cluster.indices)
+            {
+                cloud_cluster->push_back((*cloud)[idx]);
+            }
+            if (cloud_cluster->size() > min_indices)
+            {
+                cloud_cluster->width = cloud_cluster->size();
+                cloud_cluster->height = 1;
+                cloud_cluster->is_dense = true;
+                clusters.push_back(cloud_cluster);
+                std::cout << "Cluster Pushed" << std::endl;
+            }
+
+        }
     }
 
     void performKMeans(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, int cluster_size)
@@ -115,12 +166,13 @@ public:
             std::vector<float> point_data = {point.x, point.y, point.z};
             input_data.push_back(point_data);
         }
+
         kmeans.setInputData(input_data);
         kmeans.kMeans();
         centroids = kmeans.get_centroids();
         std::cout << "K-means clustering completed." << std::endl;
-        
-        // Logging centroids
+
+        std::cout << "centroids size: " << centroids.size() << std::endl;
         std::cout << "Centroids:" << std::endl;
         for (const auto &centroid : centroids)
         {
@@ -128,21 +180,22 @@ public:
         }
     }
 
-    void visualizeClusters(int point_size = 3)
+    void visualizeCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, pcl::Kmeans::Centroids centroids, int point_size = 3)
     {
-        for (const auto &cluster : cluster_indices)
+        pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("Cluster Viewer"));
+
+        for (int i = 0; i < centroids.size(); i++)
         {
-            for (const auto &idx : cluster.indices)
-            {
-                cloud_cluster->push_back((*cloud)[idx]);
-            }
-            cloud_cluster->width = cloud_cluster->size();
-            cloud_cluster->height = 1;
-            cloud_cluster->is_dense = true;
-            viewer->removeAllPointClouds();
-            viewer->addPointCloud<pcl::PointXYZ>(cloud_cluster);
-            viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size);
+            pcl::PointCloud<pcl::PointXYZ>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZ>);
+            cluster->points.push_back(pcl::PointXYZ(centroids[i][0], centroids[i][1], centroids[i][2]));
+            std::stringstream ss;
+            ss << "centroid_" << i;
+            viewer->addPointCloud<pcl::PointXYZ>(cluster, ss.str());
+            viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size * 3, ss.str());
         }
+
+        viewer->addPointCloud<pcl::PointXYZ>(point_cloud);
+        viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size);
         viewer->spin();
         std::cout << "Cluster visualization completed." << std::endl;
     }
@@ -176,7 +229,6 @@ private:
     pcl::VoxelGrid<pcl::PointXYZ> vg;
     pcl::visualization::PCLVisualizer::Ptr viewer;
     pcl::PCDWriter writer;
-    std::vector<pcl::PointIndices> cluster_indices;
     pcl::ModelCoefficients::Ptr coefficients;
     pcl::PointIndices::Ptr inliers;
     pcl::ExtractIndices<pcl::PointXYZ> extract;
@@ -186,17 +238,19 @@ int main()
 {
     PointCloudAnalyzer pcl;
 
-    pcl.loadPCD("440903000.pcd");
+    pcl.loadPCD("/home/cenk/pcl_examples/clouds/euro_pallet.pcd");
     std::cout << "PointCloud loaded." << std::endl;
 
-    pcl.downsample(0.01f);
+    pcl.downsample(pcl.cloud, 0.01f);
 
     PointCloudAnalyzer::SACParams sac_params;
     sac_params.optimize_coefficients = true;
     sac_params.model_type = pcl::SACMODEL_PLANE;
     sac_params.method_type = pcl::SAC_RANSAC;
-    sac_params.distance_threshold = 0.01;
     sac_params.max_iterations = 100;
+    sac_params.distance_threshold = 0.01;
+    sac_params.filtering = true;
+    sac_params.min_indices = 200;
     pcl.segmentPlane(pcl.cloud, sac_params);
 
     std::cout << "PointCloud representing the planar component: " << pcl.cloud->size() << " data points." << std::endl;
@@ -205,15 +259,22 @@ int main()
     ec_params.cluster_tolerance = 0.015;
     ec_params.min_cluster_size = 50;
     ec_params.max_cluster_size = 25000;
-    pcl.extractClusters(ec_params);
+    pcl.extractClusters(pcl.cloud, ec_params);
 
-    pcl.segmentPlane(pcl.cloud_cluster, sac_params);
+    pcl.createNewCloudFromIndicies(pcl.cluster_indices, pcl.cloud_cluster, 200);
 
-    pcl.performKMeans(pcl.cloud_cluster, 5);
+    sac_params.distance_threshold = 0.02;
+    sac_params.filtering = false;
+    sac_params.is_cloud_clustered = true;
 
-    pcl.visualizeClusters();
+    for (const auto &cluster : pcl.clusters)
+    {
+        std::cout << "Cluster size: " << cluster->size() << std::endl;
 
-    // pcl.writeClusters("cloud_cluster_");
+        pcl.segmentPlane(cluster, sac_params);
+        pcl.performKMeans(cluster, 2);
+        pcl.visualizeCluster(cluster, pcl.centroids, 3);
+    }
 
     return 0;
 }
