@@ -4,6 +4,7 @@
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/features/normal_3d.h>
+#include <pcl/features/moment_of_inertia_estimation.h>
 #include <pcl/search/kdtree.h>
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
@@ -17,7 +18,6 @@
 
 class PointCloudAnalyzer
 {
-protected:
 public:
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster;
@@ -62,6 +62,21 @@ public:
         float limit_max;
     };
 
+    struct MomentOfInertiaParams
+    {
+        std::vector<float> moment_of_inertia;
+        std::vector<float> eccentricity;
+        pcl::PointXYZ min_point_AABB;
+        pcl::PointXYZ max_point_AABB;
+        pcl::PointXYZ min_point_OBB;
+        pcl::PointXYZ max_point_OBB;
+        pcl::PointXYZ position_OBB;
+        Eigen::Matrix3f rotational_matrix_OBB;
+        float major_value, middle_value, minor_value;
+        Eigen::Vector3f major_vector, middle_vector, minor_vector;
+        Eigen::Vector3f mass_center;
+    };
+
     struct PassThroughFilterParams
     {
         std::vector<FilterField> filter_fields;
@@ -74,6 +89,7 @@ public:
         SACParams cluster_sac_params;
         EuclideanClusterParams ec_params;
         PassThroughFilterParams passthrough_filter_params;
+        MomentOfInertiaParams moment_of_inertia_params;
         float downsample_leaf_size;
         int kmeans_cluster_size;
         int visualization_point_size;
@@ -164,6 +180,7 @@ public:
         std::cout << "cluster_indices size: " << cluster_indices.size() << std::endl;
         std::cout << "Cluster extraction completed." << std::endl;
     }
+
     void createNewCloudFromIndicies(std::vector<pcl::PointIndices> cluster_indices, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster, int min_indices = 100)
     {
         std::cout << "Creating new cloud from indices" << std::endl;
@@ -212,6 +229,20 @@ public:
         }
     }
 
+    void momentOfInertia(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, MomentOfInertiaParams &params)
+    {
+        feature_extractor.setInputCloud(point_cloud);
+        feature_extractor.compute();
+
+        feature_extractor.getMomentOfInertia(params.moment_of_inertia);
+        feature_extractor.getEccentricity(params.eccentricity);
+        feature_extractor.getAABB(params.min_point_AABB, params.max_point_AABB);
+        feature_extractor.getOBB(params.min_point_OBB, params.max_point_OBB, params.position_OBB, params.rotational_matrix_OBB);
+        feature_extractor.getEigenValues(params.major_value, params.middle_value, params.minor_value);
+        feature_extractor.getEigenVectors(params.major_vector, params.middle_vector, params.minor_vector);
+        feature_extractor.getMassCenter(params.mass_center);
+    }
+
     void filterCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, PassThroughFilterParams params)
     {
         for (const auto &filterField : params.filter_fields)
@@ -223,7 +254,7 @@ public:
         }
     }
 
-    void visualizeCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, pcl::Kmeans::Centroids centroids, int point_size = 3)
+    void visualizeCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, pcl::Kmeans::Centroids centroids, Parameters &params)
     {
         for (int i = 0; i < centroids.size(); i++)
         {
@@ -233,15 +264,48 @@ public:
             ss << "centroid_" << centroid_i;
             centroid_i++;
             viewer->addPointCloud<pcl::PointXYZ>(cluster, ss.str());
-            viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size * 3, ss.str());
+            viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, params.visualization_point_size * 3, ss.str());
         }
         std::stringstream ss;
         ss << "cluster_" << cluster_i;
-        cluster_i++;
         viewer->addPointCloud<pcl::PointXYZ>(point_cloud, ss.str());
-        viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size, ss.str());
+        viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, params.visualization_point_size, ss.str());
+        visualiseMomentOfInertia(params.moment_of_inertia_params);
+        cluster_i++;
         viewer->spin();
         std::cout << "Cluster visualization completed." << std::endl;
+    }
+
+    void visualiseMomentOfInertia(MomentOfInertiaParams p)
+    {
+        viewer->setBackgroundColor(0, 0, 0);
+        viewer->addCoordinateSystem(1.0);
+        viewer->initCameraParameters();
+        std::stringstream ss;
+        ss << "AABB_" << cluster_i;
+        viewer->addCube(p.min_point_AABB.x, p.max_point_AABB.x, p.min_point_AABB.y, p.max_point_AABB.y, p.min_point_AABB.z, p.max_point_AABB.z, 1.0, 1.0, 0.0, ss.str());
+        viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_REPRESENTATION, pcl::visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, ss.str());
+        ss << "OBB_" << cluster_i;
+        Eigen::Vector3f position(p.position_OBB.x, p.position_OBB.y, p.position_OBB.z);
+        Eigen::Quaternionf quat(p.rotational_matrix_OBB);
+        viewer->addCube(position, quat, p.max_point_OBB.x - p.min_point_OBB.x, p.max_point_OBB.y - p.min_point_OBB.y, p.max_point_OBB.z - p.min_point_OBB.z, ss.str());
+        viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_REPRESENTATION, pcl::visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, ss.str());
+
+        pcl::PointXYZ center(p.mass_center(0), p.mass_center(1), p.mass_center(2));
+        pcl::PointXYZ x_axis(p.major_vector(0) + p.mass_center(0), p.major_vector(1) + p.mass_center(1), p.major_vector(2) + p.mass_center(2));
+        pcl::PointXYZ y_axis(p.middle_vector(0) + p.mass_center(0), p.middle_vector(1) + p.mass_center(1), p.middle_vector(2) + p.mass_center(2));
+        pcl::PointXYZ z_axis(p.minor_vector(0) + p.mass_center(0), p.minor_vector(1) + p.mass_center(1), p.minor_vector(2) + p.mass_center(2));
+        
+        std::stringstream ss_major;
+        ss_major << "major_eigen_vector_" << cluster_i;
+        std::stringstream ss_middle;
+        ss_middle << "middle_eigen_vector_" << cluster_i;
+        std::stringstream ss_minor;
+        ss_minor << "minor_eigen_vector_" << cluster_i;
+
+        viewer->addLine(center, x_axis, 1.0f, 0.0f, 0.0f, ss_major.str());
+        viewer->addLine(center, y_axis, 0.0f, 1.0f, 0.0f, ss_middle.str());
+        viewer->addLine(center, z_axis, 0.0f, 0.0f, 1.0f, ss_minor.str());      
     }
 
     void writeClusters(const std::string &filename)
@@ -325,6 +389,7 @@ private:
     pcl::ExtractIndices<pcl::PointXYZ> extract;
     pcl::visualization::PCLVisualizer::Ptr viewer;
     pcl::PassThrough<pcl::PointXYZ> pass;
+    pcl::MomentOfInertiaEstimation<pcl::PointXYZ> feature_extractor;
 };
 
 int main()
@@ -358,7 +423,8 @@ int main()
         std::cout << "Cluster size: " << cluster->size() << std::endl;
         pcl.segmentPlane(cluster, params.cluster_sac_params);
         pcl.performKMeans(cluster, params.kmeans_cluster_size);
-        pcl.visualizeCluster(cluster, pcl.centroids, params.visualization_point_size);
+        pcl.momentOfInertia(cluster, params.moment_of_inertia_params);
+        pcl.visualizeCluster(cluster, pcl.centroids, params);
     }
 
     return 0;
