@@ -12,17 +12,18 @@
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/ml/kmeans.h>
+#include <pcl/common/impl/angles.hpp>
 #include <yaml-cpp/yaml.h>
 
 class PointCloudAnalyzer
 {
+protected:
 public:
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster;
     pcl::Kmeans::Centroids centroids;
     std::vector<pcl::PointIndices> cluster_indices;
     std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> clusters;
-    pcl::visualization::PCLVisualizer::Ptr viewer;
     int cluster_i, centroid_i;
     PointCloudAnalyzer() : cloud(new pcl::PointCloud<pcl::PointXYZ>),
                            cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>),
@@ -43,6 +44,8 @@ public:
         float distance_threshold;
         int max_iterations;
         int min_indices;
+        std::vector<float> normal_axis;
+        float angle_threshold;
     };
 
     struct EuclideanClusterParams
@@ -58,7 +61,7 @@ public:
         float limit_min;
         float limit_max;
     };
-    
+
     struct PassThroughFilterParams
     {
         std::vector<FilterField> filter_fields;
@@ -98,6 +101,8 @@ public:
         seg.setMethodType(params.method_type);
         seg.setDistanceThreshold(params.distance_threshold);
         seg.setMaxIterations(params.max_iterations);
+        seg.setAxis(Eigen::Vector3f(params.normal_axis[0], params.normal_axis[1], params.normal_axis[2]));
+        seg.setEpsAngle(pcl::deg2rad(params.angle_threshold));
 
         int nr_points = (int)point_cloud->size();
         if (!params.is_cloud_clustered)
@@ -183,7 +188,6 @@ public:
         }
     }
 
-    
     void performKMeans(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, int cluster_size)
     {
         pcl::Kmeans kmeans(point_cloud->size(), 3);
@@ -289,6 +293,8 @@ public:
         params.sac_params.distance_threshold = config["sac_params"]["distance_threshold"].as<float>();
         params.sac_params.filtering = config["sac_params"]["filtering"].as<bool>();
         params.sac_params.min_indices = config["sac_params"]["min_indices"].as<int>();
+        params.sac_params.normal_axis = config["cluster_sac_params"]["normal_axis"].as<std::vector<float>>();
+        params.sac_params.angle_threshold = config["cluster_sac_params"]["angle_threshold"].as<float>();
 
         params.cluster_sac_params.optimize_coefficients = config["cluster_sac_params"]["optimize_coefficients"].as<bool>();
         params.cluster_sac_params.model_type = config["cluster_sac_params"]["model_type"].as<int>();
@@ -298,11 +304,12 @@ public:
         params.cluster_sac_params.filtering = config["cluster_sac_params"]["filtering"].as<bool>();
         params.cluster_sac_params.min_indices = config["cluster_sac_params"]["min_indices"].as<int>();
         params.cluster_sac_params.is_cloud_clustered = config["cluster_sac_params"]["is_cloud_clustered"].as<bool>();
+        params.cluster_sac_params.normal_axis = config["cluster_sac_params"]["normal_axis"].as<std::vector<float>>();
+        params.cluster_sac_params.angle_threshold = config["cluster_sac_params"]["angle_threshold"].as<float>();
 
         params.ec_params.cluster_tolerance = config["ec_params"]["cluster_tolerance"].as<float>();
         params.ec_params.min_cluster_size = config["ec_params"]["min_cluster_size"].as<int>();
-        params.ec_params.max_cluster_size = config["ec_params"]["max_cluster_size"].as<int>();        
-        std::cout << "filepath: " << params.pcd_filepath << std::endl;
+        params.ec_params.max_cluster_size = config["ec_params"]["max_cluster_size"].as<int>();
     }
 
 private:
@@ -316,9 +323,9 @@ private:
     pcl::ModelCoefficients::Ptr coefficients;
     pcl::PointIndices::Ptr inliers;
     pcl::ExtractIndices<pcl::PointXYZ> extract;
+    pcl::visualization::PCLVisualizer::Ptr viewer;
     pcl::PassThrough<pcl::PointXYZ> pass;
 };
-
 
 int main()
 {
