@@ -29,7 +29,8 @@ public:
     pcl::Kmeans::Centroids centroids;
     std::vector<pcl::PointIndices> cluster_indices;
     std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> clusters;
-    int cluster_i, centroid_i;
+    int cluster_i = 0;
+    int centroid_i = 0;
     PointCloudAnalyzer() : cloud(new pcl::PointCloud<pcl::PointXYZ>),
                            cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>),
                            coefficients(new pcl::ModelCoefficients),
@@ -89,7 +90,7 @@ public:
 
     struct Parameters
     {
-        std::string pcd_filepath;
+        std::string pcd_filepath, output_pcd_filepath;
         SACParams sac_params;
         SACParams cluster_sac_params;
         EuclideanClusterParams ec_params;
@@ -321,23 +322,14 @@ public:
         viewer->addLine(center, z_axis, 0.0f, 0.0f, 1.0f, ss_minor.str());
     }
 
-    void writeClusters(const std::string &filename)
+    void writeClusters(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster, Parameters &params)
     {
-        int j = 0;
-        for (const auto &cluster : cluster_indices)
-        {
-            for (const auto &idx : cluster.indices)
-            {
-                cloud_cluster->push_back((*cloud)[idx]);
-            }
-            cloud_cluster->width = cloud_cluster->size();
-            cloud_cluster->height = 1;
-            cloud_cluster->is_dense = true;
-            std::stringstream ss;
-            ss << std::setw(4) << std::setfill('0') << j;
-            writer.write<pcl::PointXYZ>(filename + ss.str() + ".pcd", *cloud_cluster, false);
-            j++;
-        }
+        cloud_cluster->width = cloud_cluster->size();
+        cloud_cluster->height = 1;
+        cloud_cluster->is_dense = true;
+    
+        std::string cluster_index = std::to_string(cluster_i);
+        writer.write<pcl::PointXYZ>(params.output_pcd_filepath + "cloud_cluster_" + cluster_index + ".pcd", *cloud_cluster, false);
         std::cout << "Cluster writing completed." << std::endl;
     }
 
@@ -348,6 +340,7 @@ public:
         YAML::Node filterFieldsNode = config["filter_fields"];
 
         params.pcd_filepath = config["pcd_filepath"].as<std::string>();
+        params.output_pcd_filepath = config["output_pcd_filepath"].as<std::string>();
 
         for (const auto& fieldNode : filterFieldsNode)
         {
@@ -437,6 +430,7 @@ int main()
         pcl.segmentPlane(cluster, params.cluster_sac_params);
         pcl.performKMeans(cluster, params.kmeans_cluster_size);
         pcl.momentOfInertia(cluster, params.moment_of_inertia_params);
+        pcl.writeClusters(cluster, params);
         pcl.visualizeCluster(cluster, pcl.centroids, params);
     }
 
