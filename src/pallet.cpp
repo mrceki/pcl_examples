@@ -16,6 +16,11 @@
 #include <pcl/common/impl/angles.hpp>
 #include <yaml-cpp/yaml.h>
 
+float calculateDistance(float p1, float p2)
+{
+    return sqrt(pow(p1, 2) + pow(p2, 2));
+}
+
 class PointCloudAnalyzer
 {
 public:
@@ -281,10 +286,12 @@ public:
         viewer->setBackgroundColor(0, 0, 0);
         viewer->addCoordinateSystem(1.0);
         viewer->initCameraParameters();
+
         std::stringstream ss;
         ss << "AABB_" << cluster_i;
         viewer->addCube(p.min_point_AABB.x, p.max_point_AABB.x, p.min_point_AABB.y, p.max_point_AABB.y, p.min_point_AABB.z, p.max_point_AABB.z, 1.0, 1.0, 0.0, ss.str());
         viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_REPRESENTATION, pcl::visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, ss.str());
+
         ss << "OBB_" << cluster_i;
         Eigen::Vector3f position(p.position_OBB.x, p.position_OBB.y, p.position_OBB.z);
         Eigen::Quaternionf quat(p.rotational_matrix_OBB);
@@ -295,7 +302,7 @@ public:
         pcl::PointXYZ x_axis(p.major_vector(0) + p.mass_center(0), p.major_vector(1) + p.mass_center(1), p.major_vector(2) + p.mass_center(2));
         pcl::PointXYZ y_axis(p.middle_vector(0) + p.mass_center(0), p.middle_vector(1) + p.mass_center(1), p.middle_vector(2) + p.mass_center(2));
         pcl::PointXYZ z_axis(p.minor_vector(0) + p.mass_center(0), p.minor_vector(1) + p.mass_center(1), p.minor_vector(2) + p.mass_center(2));
-        
+
         std::stringstream ss_major;
         ss_major << "major_eigen_vector_" << cluster_i;
         std::stringstream ss_middle;
@@ -303,9 +310,15 @@ public:
         std::stringstream ss_minor;
         ss_minor << "minor_eigen_vector_" << cluster_i;
 
+        float x_dimension = calculateDistance(p.max_point_AABB.x - p.min_point_AABB.x, p.max_point_AABB.y - p.min_point_AABB.y);
+        float y_dimension =  p.max_point_AABB.z - p.min_point_AABB.z;
+        std::cout << "max_points_aabb: " << p.max_point_AABB << ", min_points_aabb: " << p.min_point_AABB << std::endl;
+
+        std::cout << "x_dimension: " << x_dimension << std::endl;
+        std::cout << "y_dimension: " << y_dimension << std::endl;
         viewer->addLine(center, x_axis, 1.0f, 0.0f, 0.0f, ss_major.str());
         viewer->addLine(center, y_axis, 0.0f, 1.0f, 0.0f, ss_middle.str());
-        viewer->addLine(center, z_axis, 0.0f, 0.0f, 1.0f, ss_minor.str());      
+        viewer->addLine(center, z_axis, 0.0f, 0.0f, 1.0f, ss_minor.str());
     }
 
     void writeClusters(const std::string &filename)
