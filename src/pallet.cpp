@@ -3,6 +3,7 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/moment_of_inertia_estimation.h>
 #include <pcl/search/kdtree.h>
@@ -88,6 +89,12 @@ public:
         std::vector<FilterField> filter_fields;
     };
 
+    struct SORParams
+    {
+        int mean_k;
+        float stddev_mul_thresh;
+    };
+
     struct Parameters
     {
         std::string pcd_filepath, output_pcd_filepath;
@@ -96,6 +103,7 @@ public:
         EuclideanClusterParams ec_params;
         PassThroughFilterParams passthrough_filter_params;
         MomentOfInertiaParams moment_of_inertia_params;
+        SORParams sor_params;
         float downsample_leaf_size;
         int kmeans_cluster_size;
         int visualization_point_size;
@@ -260,6 +268,14 @@ public:
         }
     }
 
+    void statisticalOutlierRemoveal(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, Parameters &params)
+    {
+        sor.setInputCloud(point_cloud);
+        sor.setMeanK(params.sor_params.mean_k);
+        sor.setStddevMulThresh(params.sor_params.stddev_mul_thresh);
+        sor.filter(*point_cloud);
+    }
+
     void visualizeCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, pcl::Kmeans::Centroids centroids, Parameters &params)
     {
         for (int i = 0; i < centroids.size(); i++)
@@ -312,7 +328,7 @@ public:
         ss_minor << "minor_eigen_vector_" << cluster_i;
 
         float x_dimension = calculateDistance(p.max_point_AABB.x - p.min_point_AABB.x, p.max_point_AABB.y - p.min_point_AABB.y);
-        float y_dimension =  p.max_point_AABB.z - p.min_point_AABB.z;
+        float y_dimension = p.max_point_AABB.z - p.min_point_AABB.z;
         std::cout << "max_points_aabb: " << p.max_point_AABB << ", min_points_aabb: " << p.min_point_AABB << std::endl;
 
         std::cout << "x_dimension: " << x_dimension << std::endl;
@@ -327,7 +343,7 @@ public:
         cloud_cluster->width = cloud_cluster->size();
         cloud_cluster->height = 1;
         cloud_cluster->is_dense = true;
-    
+
         std::string cluster_index = std::to_string(cluster_i);
         writer.write<pcl::PointXYZ>(params.output_pcd_filepath + "cloud_cluster_" + cluster_index + ".pcd", *cloud_cluster, false);
         std::cout << "Cluster writing completed." << std::endl;
@@ -342,7 +358,7 @@ public:
         params.pcd_filepath = config["pcd_filepath"].as<std::string>();
         params.output_pcd_filepath = config["output_pcd_filepath"].as<std::string>();
 
-        for (const auto& fieldNode : filterFieldsNode)
+        for (const auto &fieldNode : filterFieldsNode)
         {
             PointCloudAnalyzer::FilterField filterField;
             filterField.field = fieldNode["name"].as<std::string>();
@@ -380,6 +396,9 @@ public:
         params.ec_params.cluster_tolerance = config["ec_params"]["cluster_tolerance"].as<float>();
         params.ec_params.min_cluster_size = config["ec_params"]["min_cluster_size"].as<int>();
         params.ec_params.max_cluster_size = config["ec_params"]["max_cluster_size"].as<int>();
+
+        params.sor_params.mean_k = config["statistical_outlier_removeal"]["mean_k"].as<int>();
+        params.sor_params.stddev_mul_thresh = config["statistical_outlier_removeal"]["stddev_mul_thresh"].as<float>();
     }
 
 private:
@@ -395,6 +414,7 @@ private:
     pcl::ExtractIndices<pcl::PointXYZ> extract;
     pcl::visualization::PCLVisualizer::Ptr viewer;
     pcl::PassThrough<pcl::PointXYZ> pass;
+    pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
     pcl::MomentOfInertiaEstimation<pcl::PointXYZ> feature_extractor;
 };
 
