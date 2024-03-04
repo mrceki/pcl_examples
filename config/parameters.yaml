@@ -33,16 +33,22 @@ downsample_leaf_size: 0.01
 kmeans_cluster_size: 2
 visualization_point_size: 3
 
-filter_fields:
-  - name: x
+passthrough_filter:
+  - field: x
     limit_min: -3.0
     limit_max: 3.0
-  - name: y
+  - field: y
     limit_min: -3.0
     limit_max: 3.0
-  - name: z
+  - field: z
     limit_min: -3.0
     limit_max: 3.0
+
+conditional_removal:
+  - field: z
+    limit_min: 0.0
+    limit_max: 0.8
+  # keep_organized: true
 
 statistical_outlier_removal:
   mean_k: 50
@@ -52,7 +58,7 @@ radius_outlier_removal:
   radius_search: 0.01
   min_neighbors_in_radius: 50
   keep_organized: true
-  
+
 # The following models are supported:
 
 # 0 SACMODEL_PLANE - used to determine plane models. The four coefficients of the plane are its Hessian Normal form: [normal_x normal_y normal_z d]
