@@ -4,6 +4,8 @@
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/radius_outlier_removal.h>
+#include <pcl/filters/conditional_removal.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/moment_of_inertia_estimation.h>
 #include <pcl/search/kdtree.h>
@@ -95,6 +97,13 @@ public:
         float stddev_mul_thresh;
     };
 
+    struct RORParams
+    {
+        float radius_search;
+        int min_neighbors_in_radius;
+        bool keep_organized;
+    };
+
     struct Parameters
     {
         std::string pcd_filepath, output_pcd_filepath;
@@ -104,6 +113,7 @@ public:
         PassThroughFilterParams passthrough_filter_params;
         MomentOfInertiaParams moment_of_inertia_params;
         SORParams sor_params;
+        RORParams ror_params;
         float downsample_leaf_size;
         int kmeans_cluster_size;
         int visualization_point_size;
@@ -268,12 +278,21 @@ public:
         }
     }
 
-    void statisticalOutlierRemoveal(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, Parameters &params)
+    void statisticalOutlierRemoval(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, Parameters &params)
     {
         sor.setInputCloud(point_cloud);
         sor.setMeanK(params.sor_params.mean_k);
         sor.setStddevMulThresh(params.sor_params.stddev_mul_thresh);
         sor.filter(*point_cloud);
+    }
+
+    void radiusOutlierRemoval(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, Parameters &params)
+    {
+        ror.setInputCloud(point_cloud);
+        ror.setRadiusSearch(params.ror_params.radius_search);
+        ror.setMinNeighborsInRadius(params.ror_params.min_neighbors_in_radius);
+        ror.setKeepOrganized(params.ror_params.keep_organized);
+        ror.filter(*point_cloud);
     }
 
     void visualizeCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, pcl::Kmeans::Centroids centroids, Parameters &params)
@@ -397,8 +416,12 @@ public:
         params.ec_params.min_cluster_size = config["ec_params"]["min_cluster_size"].as<int>();
         params.ec_params.max_cluster_size = config["ec_params"]["max_cluster_size"].as<int>();
 
-        params.sor_params.mean_k = config["statistical_outlier_removeal"]["mean_k"].as<int>();
-        params.sor_params.stddev_mul_thresh = config["statistical_outlier_removeal"]["stddev_mul_thresh"].as<float>();
+        params.sor_params.mean_k = config["statistical_outlier_removal"]["mean_k"].as<int>();
+        params.sor_params.stddev_mul_thresh = config["statistical_outlier_removal"]["stddev_mul_thresh"].as<float>();
+
+        params.ror_params.radius_search = config["radius_outlier_removal"]["radius_search"].as<float>();
+        params.ror_params.min_neighbors_in_radius = config["radius_outlier_removal"]["min_neighbors_in_radius"].as<int>();
+        params.ror_params.keep_organized = config["radius_outlier_removal"]["keep_organized"].as<bool>();
     }
 
 private:
@@ -415,6 +438,7 @@ private:
     pcl::visualization::PCLVisualizer::Ptr viewer;
     pcl::PassThrough<pcl::PointXYZ> pass;
     pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+    pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
     pcl::MomentOfInertiaEstimation<pcl::PointXYZ> feature_extractor;
 };
 

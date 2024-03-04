@@ -1,5 +1,5 @@
 pcd_filepath: "/home/cenk/pcl_examples/clouds/euro_pallet.pcd"
-
+output_pcd_filepath: "/home/cenk/pcl_examples/clouds/results/"
 sac_params:
   optimize_coefficients: true
   model_type: 0
@@ -44,6 +44,15 @@ filter_fields:
     limit_min: -3.0
     limit_max: 3.0
 
+statistical_outlier_removal:
+  mean_k: 50
+  stddev_mul_thresh: 1.0
+
+radius_outlier_removal:
+  radius_search: 0.01
+  min_neighbors_in_radius: 50
+  keep_organized: true
+  
 # The following models are supported:
 
 # 0 SACMODEL_PLANE - used to determine plane models. The four coefficients of the plane are its Hessian Normal form: [normal_x normal_y normal_z d]
