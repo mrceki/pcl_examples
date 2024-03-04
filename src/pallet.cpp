@@ -313,6 +313,13 @@ public:
         cor.filter(*point_cloud); 
     }
 
+    auto mergeClouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2)
+    {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr merged_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+        *merged_cloud = *cloud1 + *cloud2;
+        return merged_cloud;
+    }
+
     void visualizeCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, pcl::Kmeans::Centroids centroids, Parameters &params)
     {
         for (int i = 0; i < centroids.size(); i++)
