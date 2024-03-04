@@ -86,9 +86,10 @@ public:
         Eigen::Vector3f mass_center;
     };
 
-    struct PassThroughFilterParams
+    struct FilterParams
     {
-        std::vector<FilterField> filter_fields;
+        std::vector<FilterField> passthrough_filter_fields;
+        std::vector<FilterField> conditional_removal_fields;
     };
 
     struct SORParams
@@ -110,7 +111,7 @@ public:
         SACParams sac_params;
         SACParams cluster_sac_params;
         EuclideanClusterParams ec_params;
-        PassThroughFilterParams passthrough_filter_params;
+        FilterParams filter_params;
         MomentOfInertiaParams moment_of_inertia_params;
         SORParams sor_params;
         RORParams ror_params;
@@ -267,9 +268,9 @@ public:
         feature_extractor.getMassCenter(params.mass_center);
     }
 
-    void filterCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, PassThroughFilterParams params)
+    void passthroughFilterCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, FilterParams &params)
     {
-        for (const auto &filterField : params.filter_fields)
+        for (const auto &filterField : params.passthrough_filter_fields)
         {
             pass.setInputCloud(point_cloud);
             pass.setFilterFieldName(filterField.field);
@@ -293,6 +294,23 @@ public:
         ror.setMinNeighborsInRadius(params.ror_params.min_neighbors_in_radius);
         ror.setKeepOrganized(params.ror_params.keep_organized);
         ror.filter(*point_cloud);
+    }
+
+    void conditionalRemoval(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, Parameters &params) 
+    {
+        pcl::ConditionAnd<pcl::PointXYZ>::Ptr range_cond(new pcl::ConditionAnd<pcl::PointXYZ>());
+
+        for (const auto &filterField : params.filter_params.conditional_removal_fields)
+        {
+            pcl::FieldComparison<pcl::PointXYZ>::ConstPtr comparison(new pcl::FieldComparison<pcl::PointXYZ>(filterField.field, pcl::ComparisonOps::GT, filterField.limit_min));
+            range_cond->addComparison(comparison);
+            comparison.reset(new pcl::FieldComparison<pcl::PointXYZ>(filterField.field, pcl::ComparisonOps::LT, filterField.limit_max));
+            range_cond->addComparison(comparison);
+        }
+        cor.setCondition(range_cond);
+        cor.setInputCloud(point_cloud);
+        cor.setKeepOrganized(params.ror_params.keep_organized);
+        cor.filter(*point_cloud); 
     }
 
     void visualizeCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, pcl::Kmeans::Centroids centroids, Parameters &params)
@@ -372,20 +390,23 @@ public:
                                const std::string &yaml_file)
     {
         YAML::Node config = YAML::LoadFile(yaml_file);
-        YAML::Node filterFieldsNode = config["filter_fields"];
-
+        YAML::Node passthrougFilter = config["passthrough_filter"];
+        YAML::Node conditionalRemoval = config["conditional_removal"];
         params.pcd_filepath = config["pcd_filepath"].as<std::string>();
         params.output_pcd_filepath = config["output_pcd_filepath"].as<std::string>();
 
-        for (const auto &fieldNode : filterFieldsNode)
-        {
-            PointCloudAnalyzer::FilterField filterField;
-            filterField.field = fieldNode["name"].as<std::string>();
-            filterField.limit_min = fieldNode["limit_min"].as<float>();
-            filterField.limit_max = fieldNode["limit_max"].as<float>();
+        auto parseFilterFields = [&](const YAML::Node& node, std::vector<PointCloudAnalyzer::FilterField>& fields) {
+            for (const auto& config : node) {
+                fields.push_back({
+                    config["field"].as<std::string>(),
+                    config["limit_min"].as<float>(),
+                    config["limit_max"].as<float>()
+                });
+            }
+        };
 
-            params.passthrough_filter_params.filter_fields.push_back(filterField);
-        }
+        parseFilterFields(passthrougFilter, params.filter_params.passthrough_filter_fields);
+        parseFilterFields(conditionalRemoval, params.filter_params.conditional_removal_fields);
 
         params.downsample_leaf_size = config["downsample_leaf_size"].as<float>();
         params.kmeans_cluster_size = config["kmeans_cluster_size"].as<int>();
@@ -439,6 +460,7 @@ private:
     pcl::PassThrough<pcl::PointXYZ> pass;
     pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
     pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
+    pcl::ConditionalRemoval<pcl::PointXYZ> cor;
     pcl::MomentOfInertiaEstimation<pcl::PointXYZ> feature_extractor;
 };
 
@@ -459,8 +481,8 @@ int main()
     pcl.loadPCD(params.pcd_filepath);
     std::cout << "PointCloud loaded." << std::endl;
 
-    pcl.filterCloud(pcl.cloud, params.passthrough_filter_params);
-
+    pcl.passthroughFilterCloud(pcl.cloud, params.filter_params);
+    pcl.conditionalRemoval(pcl.cloud, params);
     pcl.downsample(pcl.cloud, params.downsample_leaf_size);
     pcl.segmentPlane(pcl.cloud, params.sac_params);
     std::cout << "PointCloud representing the planar component: " << pcl.cloud->size() << " data points." << std::endl;
