@@ -13,6 +13,7 @@
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
+#include <pcl/segmentation/region_growing_rgb.h>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/ml/kmeans.h>
@@ -27,7 +28,7 @@ float calculateDistance(float p1, float p2)
 class PointCloudAnalyzer
 {
 public:
-    typedef pcl::PointXYZ PointT;
+    typedef pcl::PointXYZRGB PointT;
     pcl::PointCloud<PointT>::Ptr cloud;
     pcl::PointCloud<PointT>::Ptr cloud_cluster;
     pcl::Kmeans::Centroids centroids;
@@ -87,6 +88,18 @@ public:
         Eigen::Vector3f mass_center;
     };
 
+    struct RegionGrowingParams
+    {
+        int min_cluster_size;
+        int max_cluster_size;
+        int number_of_neighbours;
+        float distance_threshold;
+        float point_color_threshold;
+        float region_color_threshold;
+        float smoothness_threshold;
+        float curvature_threshold;
+    };
+
     struct FilterParams
     {
         std::vector<FilterField> passthrough_filter_fields;
@@ -111,6 +124,7 @@ public:
         std::string pcd_filepath, output_pcd_filepath;
         SACParams sac_params;
         SACParams cluster_sac_params;
+        RegionGrowingParams region_growing_params;
         EuclideanClusterParams ec_params;
         FilterParams filter_params;
         MomentOfInertiaParams moment_of_inertia_params;
@@ -138,21 +152,21 @@ public:
 
     void segmentPlane(pcl::PointCloud<PointT>::Ptr point_cloud, SACParams params)
     {
-        seg.setOptimizeCoefficients(params.optimize_coefficients);
-        seg.setModelType(params.model_type);
-        seg.setMethodType(params.method_type);
-        seg.setDistanceThreshold(params.distance_threshold);
-        seg.setMaxIterations(params.max_iterations);
-        seg.setAxis(Eigen::Vector3f(params.normal_axis[0], params.normal_axis[1], params.normal_axis[2]));
-        seg.setEpsAngle(pcl::deg2rad(params.angle_threshold));
+        sac_seg.setOptimizeCoefficients(params.optimize_coefficients);
+        sac_seg.setModelType(params.model_type);
+        sac_seg.setMethodType(params.method_type);
+        sac_seg.setDistanceThreshold(params.distance_threshold);
+        sac_seg.setMaxIterations(params.max_iterations);
+        sac_seg.setAxis(Eigen::Vector3f(params.normal_axis[0], params.normal_axis[1], params.normal_axis[2]));
+        sac_seg.setEpsAngle(pcl::deg2rad(params.angle_threshold));
 
         int nr_points = (int)point_cloud->size();
         if (!params.is_cloud_clustered)
         {
             while (point_cloud->size() > 0.3 * nr_points)
             {
-                seg.setInputCloud(point_cloud);
-                seg.segment(*inliers, *coefficients);
+                sac_seg.setInputCloud(point_cloud);
+                sac_seg.segment(*inliers, *coefficients);
                 std::cout << "Segmented cloud size: " << inliers->indices.size() << std::endl;
                 if (inliers->indices.size() == 0)
                 {
@@ -170,8 +184,8 @@ public:
         }
         else
         {
-            seg.setInputCloud(point_cloud);
-            seg.segment(*inliers, *coefficients);
+            sac_seg.setInputCloud(point_cloud);
+            sac_seg.segment(*inliers, *coefficients);
             std::cout << "Segmented cloud size: " << inliers->indices.size() << std::endl;
             if (inliers->indices.size() == 0)
             {
@@ -192,6 +206,25 @@ public:
             }
         }
         std::cout << "Plane segmentation completed." << std::endl;
+    }
+
+    void regionGrowing(pcl::PointCloud<PointT>::Ptr point_cloud, RegionGrowingParams &params)
+    {
+        pcl::RegionGrowingRGB<PointT> reg;
+        reg.setSearchMethod(tree);
+
+        reg.setMinClusterSize(params.min_cluster_size);
+        reg.setMaxClusterSize(params.max_cluster_size);
+        reg.setNumberOfNeighbours(params.number_of_neighbours);
+        reg.setDistanceThreshold(params.distance_threshold);
+        reg.setPointColorThreshold(params.point_color_threshold);
+        reg.setRegionColorThreshold(params.region_color_threshold);
+        reg.setSmoothnessThreshold(params.smoothness_threshold / 180.0 * M_PI);
+        reg.setCurvatureThreshold(params.curvature_threshold);
+        reg.setInputCloud(point_cloud);
+        // std::vector<pcl::PointIndices> clusters;  
+        // reg.extract(clusters);      
+        point_cloud = reg.getColoredCloud();
     }
 
     void extractClusters(pcl::PointCloud<PointT>::Ptr point_cloud, EuclideanClusterParams params)
@@ -430,6 +463,15 @@ public:
         params.sac_params.normal_axis = config["cluster_sac_params"]["normal_axis"].as<std::vector<float>>();
         params.sac_params.angle_threshold = config["cluster_sac_params"]["angle_threshold"].as<float>();
 
+        params.region_growing_params.min_cluster_size = config["region_growing_params"]["min_cluster_size"].as<int>();
+        params.region_growing_params.max_cluster_size = config["region_growing_params"]["max_cluster_size"].as<int>();
+        params.region_growing_params.number_of_neighbours = config["region_growing_params"]["number_of_neighbours"].as<int>();
+        params.region_growing_params.distance_threshold = config["region_growing_params"]["distance_threshold"].as<float>();
+        params.region_growing_params.point_color_threshold = config["region_growing_params"]["point_color_threshold"].as<float>();
+        params.region_growing_params.region_color_threshold = config["region_growing_params"]["region_color_threshold"].as<float>();
+        params.region_growing_params.smoothness_threshold = config["region_growing_params"]["smoothness_threshold"].as<float>();
+        params.region_growing_params.curvature_threshold = config["region_growing_params"]["curvature_threshold"].as<float>();
+
         params.cluster_sac_params.optimize_coefficients = config["cluster_sac_params"]["optimize_coefficients"].as<bool>();
         params.cluster_sac_params.model_type = config["cluster_sac_params"]["model_type"].as<int>();
         params.cluster_sac_params.method_type = config["cluster_sac_params"]["method_type"].as<int>();
@@ -458,7 +500,7 @@ private:
     pcl::PointCloud<PointT>::Ptr cloud_filtered;
     pcl::search::KdTree<PointT>::Ptr tree;
     pcl::EuclideanClusterExtraction<PointT> ec;
-    pcl::SACSegmentation<PointT> seg;
+    pcl::SACSegmentation<PointT> sac_seg;
     pcl::VoxelGrid<PointT> vg;
     pcl::PCDWriter writer;
     pcl::ModelCoefficients::Ptr coefficients;
@@ -494,7 +536,7 @@ int main()
     pcl.downsample(pcl.cloud, params.downsample_leaf_size);
     pcl.segmentPlane(pcl.cloud, params.sac_params);
     std::cout << "PointCloud representing the planar component: " << pcl.cloud->size() << " data points." << std::endl;
-
+    pcl.regionGrowing(pcl.cloud, params.region_growing_params);
     pcl.extractClusters(pcl.cloud, params.ec_params);
     pcl.createNewCloudFromIndicies(pcl.cluster_indices, pcl.cloud_cluster, params.sac_params.min_indices);
 
