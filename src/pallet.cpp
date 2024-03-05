@@ -27,18 +27,19 @@ float calculateDistance(float p1, float p2)
 class PointCloudAnalyzer
 {
 public:
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster;
+    typedef pcl::PointXYZ PointT;
+    pcl::PointCloud<PointT>::Ptr cloud;
+    pcl::PointCloud<PointT>::Ptr cloud_cluster;
     pcl::Kmeans::Centroids centroids;
     std::vector<pcl::PointIndices> cluster_indices;
-    std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> clusters;
+    std::vector<pcl::PointCloud<PointT>::Ptr> clusters;
     int cluster_i = 0;
     int centroid_i = 0;
-    PointCloudAnalyzer() : cloud(new pcl::PointCloud<pcl::PointXYZ>),
-                           cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>),
+    PointCloudAnalyzer() : cloud(new pcl::PointCloud<PointT>),
+                           cloud_filtered(new pcl::PointCloud<PointT>),
                            coefficients(new pcl::ModelCoefficients),
                            inliers(new pcl::PointIndices),
-                           tree(new pcl::search::KdTree<pcl::PointXYZ>),
+                           tree(new pcl::search::KdTree<PointT>),
                            viewer(new pcl::visualization::PCLVisualizer("Cluster Viewer"))
     {
     }
@@ -75,11 +76,11 @@ public:
     {
         std::vector<float> moment_of_inertia;
         std::vector<float> eccentricity;
-        pcl::PointXYZ min_point_AABB;
-        pcl::PointXYZ max_point_AABB;
-        pcl::PointXYZ min_point_OBB;
-        pcl::PointXYZ max_point_OBB;
-        pcl::PointXYZ position_OBB;
+        PointT min_point_AABB;
+        PointT max_point_AABB;
+        PointT min_point_OBB;
+        PointT max_point_OBB;
+        PointT position_OBB;
         Eigen::Matrix3f rotational_matrix_OBB;
         float major_value, middle_value, minor_value;
         Eigen::Vector3f major_vector, middle_vector, minor_vector;
@@ -122,12 +123,12 @@ public:
 
     void loadPCD(const std::string &filename)
     {
-        cloud.reset(new pcl::PointCloud<pcl::PointXYZ>);
+        cloud.reset(new pcl::PointCloud<PointT>);
         reader.read(filename, *cloud);
         std::cout << "Loaded " << cloud->size() << " data points from " << filename << std::endl;
     }
 
-    void downsample(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, float leaf_size)
+    void downsample(pcl::PointCloud<PointT>::Ptr point_cloud, float leaf_size)
     {
         vg.setInputCloud(point_cloud);
         vg.setLeafSize(leaf_size, leaf_size, leaf_size);
@@ -135,7 +136,7 @@ public:
         std::cout << "PointCloud after filtering has: " << point_cloud->size() << " data points." << std::endl; //*
     }
 
-    void segmentPlane(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, SACParams params)
+    void segmentPlane(pcl::PointCloud<PointT>::Ptr point_cloud, SACParams params)
     {
         seg.setOptimizeCoefficients(params.optimize_coefficients);
         seg.setModelType(params.model_type);
@@ -193,7 +194,7 @@ public:
         std::cout << "Plane segmentation completed." << std::endl;
     }
 
-    void extractClusters(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, EuclideanClusterParams params)
+    void extractClusters(pcl::PointCloud<PointT>::Ptr point_cloud, EuclideanClusterParams params)
     {
         tree->setInputCloud(point_cloud);
         ec.setClusterTolerance(params.cluster_tolerance);
@@ -206,14 +207,14 @@ public:
         std::cout << "Cluster extraction completed." << std::endl;
     }
 
-    void createNewCloudFromIndicies(std::vector<pcl::PointIndices> cluster_indices, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster, int min_indices = 100)
+    void createNewCloudFromIndicies(std::vector<pcl::PointIndices> cluster_indices, pcl::PointCloud<PointT>::Ptr cloud_cluster, int min_indices = 100)
     {
         std::cout << "Creating new cloud from indices" << std::endl;
         std::cout << "cluster_indices size: " << cluster_indices.size() << std::endl;
 
         for (const auto &cluster : cluster_indices)
         {
-            cloud_cluster.reset(new pcl::PointCloud<pcl::PointXYZ>);
+            cloud_cluster.reset(new pcl::PointCloud<PointT>);
             std::cout << "Cluster Started" << std::endl;
             for (const auto &idx : cluster.indices)
             {
@@ -230,7 +231,7 @@ public:
         }
     }
 
-    void performKMeans(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, int cluster_size)
+    void performKMeans(pcl::PointCloud<PointT>::Ptr point_cloud, int cluster_size)
     {
         pcl::Kmeans kmeans(point_cloud->size(), 3);
         kmeans.setClusterSize(cluster_size);
@@ -254,7 +255,7 @@ public:
         }
     }
 
-    void momentOfInertia(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, MomentOfInertiaParams &params)
+    void momentOfInertia(pcl::PointCloud<PointT>::Ptr point_cloud, MomentOfInertiaParams &params)
     {
         feature_extractor.setInputCloud(point_cloud);
         feature_extractor.compute();
@@ -268,7 +269,7 @@ public:
         feature_extractor.getMassCenter(params.mass_center);
     }
 
-    void passthroughFilterCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, FilterParams &params)
+    void passthroughFilterCloud(pcl::PointCloud<PointT>::Ptr point_cloud, FilterParams &params)
     {
         for (const auto &filterField : params.passthrough_filter_fields)
         {
@@ -279,7 +280,7 @@ public:
         }
     }
 
-    void statisticalOutlierRemoval(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, Parameters &params)
+    void statisticalOutlierRemoval(pcl::PointCloud<PointT>::Ptr point_cloud, Parameters &params)
     {
         sor.setInputCloud(point_cloud);
         sor.setMeanK(params.sor_params.mean_k);
@@ -287,7 +288,7 @@ public:
         sor.filter(*point_cloud);
     }
 
-    void radiusOutlierRemoval(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, Parameters &params)
+    void radiusOutlierRemoval(pcl::PointCloud<PointT>::Ptr point_cloud, Parameters &params)
     {
         ror.setInputCloud(point_cloud);
         ror.setRadiusSearch(params.ror_params.radius_search);
@@ -296,45 +297,45 @@ public:
         ror.filter(*point_cloud);
     }
 
-    void conditionalRemoval(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, Parameters &params) 
+    void conditionalRemoval(pcl::PointCloud<PointT>::Ptr point_cloud, Parameters &params)
     {
-        pcl::ConditionAnd<pcl::PointXYZ>::Ptr range_cond(new pcl::ConditionAnd<pcl::PointXYZ>());
+        pcl::ConditionAnd<PointT>::Ptr range_cond(new pcl::ConditionAnd<PointT>());
 
         for (const auto &filterField : params.filter_params.conditional_removal_fields)
         {
-            pcl::FieldComparison<pcl::PointXYZ>::ConstPtr comparison(new pcl::FieldComparison<pcl::PointXYZ>(filterField.field, pcl::ComparisonOps::GT, filterField.limit_min));
+            pcl::FieldComparison<PointT>::ConstPtr comparison(new pcl::FieldComparison<PointT>(filterField.field, pcl::ComparisonOps::GT, filterField.limit_min));
             range_cond->addComparison(comparison);
-            comparison.reset(new pcl::FieldComparison<pcl::PointXYZ>(filterField.field, pcl::ComparisonOps::LT, filterField.limit_max));
+            comparison.reset(new pcl::FieldComparison<PointT>(filterField.field, pcl::ComparisonOps::LT, filterField.limit_max));
             range_cond->addComparison(comparison);
         }
         cor.setCondition(range_cond);
         cor.setInputCloud(point_cloud);
         cor.setKeepOrganized(params.ror_params.keep_organized);
-        cor.filter(*point_cloud); 
+        cor.filter(*point_cloud);
     }
 
-    auto mergeClouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2)
+    auto mergeClouds(pcl::PointCloud<PointT>::Ptr cloud1, pcl::PointCloud<PointT>::Ptr cloud2)
     {
-        pcl::PointCloud<pcl::PointXYZ>::Ptr merged_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<PointT>::Ptr merged_cloud(new pcl::PointCloud<PointT>);
         *merged_cloud = *cloud1 + *cloud2;
         return merged_cloud;
     }
 
-    void visualizeCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud, pcl::Kmeans::Centroids centroids, Parameters &params)
+    void visualizeCluster(pcl::PointCloud<PointT>::Ptr point_cloud, pcl::Kmeans::Centroids centroids, Parameters &params)
     {
         for (int i = 0; i < centroids.size(); i++)
         {
-            pcl::PointCloud<pcl::PointXYZ>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZ>);
-            cluster->points.push_back(pcl::PointXYZ(centroids[i][0], centroids[i][1], centroids[i][2]));
+            pcl::PointCloud<PointT>::Ptr cluster(new pcl::PointCloud<PointT>);
+            cluster->points.push_back(PointT(centroids[i][0], centroids[i][1], centroids[i][2]));
             std::stringstream ss;
             ss << "centroid_" << centroid_i;
             centroid_i++;
-            viewer->addPointCloud<pcl::PointXYZ>(cluster, ss.str());
+            viewer->addPointCloud<PointT>(cluster, ss.str());
             viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, params.visualization_point_size * 3, ss.str());
         }
         std::stringstream ss;
         ss << "cluster_" << cluster_i;
-        viewer->addPointCloud<pcl::PointXYZ>(point_cloud, ss.str());
+        viewer->addPointCloud<PointT>(point_cloud, ss.str());
         viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, params.visualization_point_size, ss.str());
         visualiseMomentOfInertia(params.moment_of_inertia_params);
         cluster_i++;
@@ -359,10 +360,10 @@ public:
         viewer->addCube(position, quat, p.max_point_OBB.x - p.min_point_OBB.x, p.max_point_OBB.y - p.min_point_OBB.y, p.max_point_OBB.z - p.min_point_OBB.z, ss.str());
         viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_REPRESENTATION, pcl::visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, ss.str());
 
-        pcl::PointXYZ center(p.mass_center(0), p.mass_center(1), p.mass_center(2));
-        pcl::PointXYZ x_axis(p.major_vector(0) + p.mass_center(0), p.major_vector(1) + p.mass_center(1), p.major_vector(2) + p.mass_center(2));
-        pcl::PointXYZ y_axis(p.middle_vector(0) + p.mass_center(0), p.middle_vector(1) + p.mass_center(1), p.middle_vector(2) + p.mass_center(2));
-        pcl::PointXYZ z_axis(p.minor_vector(0) + p.mass_center(0), p.minor_vector(1) + p.mass_center(1), p.minor_vector(2) + p.mass_center(2));
+        PointT center(p.mass_center(0), p.mass_center(1), p.mass_center(2));
+        PointT x_axis(p.major_vector(0) + p.mass_center(0), p.major_vector(1) + p.mass_center(1), p.major_vector(2) + p.mass_center(2));
+        PointT y_axis(p.middle_vector(0) + p.mass_center(0), p.middle_vector(1) + p.mass_center(1), p.middle_vector(2) + p.mass_center(2));
+        PointT z_axis(p.minor_vector(0) + p.mass_center(0), p.minor_vector(1) + p.mass_center(1), p.minor_vector(2) + p.mass_center(2));
 
         std::stringstream ss_major;
         ss_major << "major_eigen_vector_" << cluster_i;
@@ -382,14 +383,14 @@ public:
         viewer->addLine(center, z_axis, 0.0f, 0.0f, 1.0f, ss_minor.str());
     }
 
-    void writeClusters(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster, Parameters &params)
+    void writeClusters(pcl::PointCloud<PointT>::Ptr cloud_cluster, Parameters &params)
     {
         cloud_cluster->width = cloud_cluster->size();
         cloud_cluster->height = 1;
         cloud_cluster->is_dense = true;
 
         std::string cluster_index = std::to_string(cluster_i);
-        writer.write<pcl::PointXYZ>(params.output_pcd_filepath + "cloud_cluster_" + cluster_index + ".pcd", *cloud_cluster, false);
+        writer.write<PointT>(params.output_pcd_filepath + "cloud_cluster_" + cluster_index + ".pcd", *cloud_cluster, false);
         std::cout << "Cluster writing completed." << std::endl;
     }
 
@@ -402,13 +403,13 @@ public:
         params.pcd_filepath = config["pcd_filepath"].as<std::string>();
         params.output_pcd_filepath = config["output_pcd_filepath"].as<std::string>();
 
-        auto parseFilterFields = [&](const YAML::Node& node, std::vector<PointCloudAnalyzer::FilterField>& fields) {
-            for (const auto& config : node) {
-                fields.push_back({
-                    config["field"].as<std::string>(),
-                    config["limit_min"].as<float>(),
-                    config["limit_max"].as<float>()
-                });
+        auto parseFilterFields = [&](const YAML::Node &node, std::vector<PointCloudAnalyzer::FilterField> &fields)
+        {
+            for (const auto &config : node)
+            {
+                fields.push_back({config["field"].as<std::string>(),
+                                  config["limit_min"].as<float>(),
+                                  config["limit_max"].as<float>()});
             }
         };
 
@@ -454,21 +455,21 @@ public:
 
 private:
     pcl::PCDReader reader;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered;
-    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree;
-    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-    pcl::SACSegmentation<pcl::PointXYZ> seg;
-    pcl::VoxelGrid<pcl::PointXYZ> vg;
+    pcl::PointCloud<PointT>::Ptr cloud_filtered;
+    pcl::search::KdTree<PointT>::Ptr tree;
+    pcl::EuclideanClusterExtraction<PointT> ec;
+    pcl::SACSegmentation<PointT> seg;
+    pcl::VoxelGrid<PointT> vg;
     pcl::PCDWriter writer;
     pcl::ModelCoefficients::Ptr coefficients;
     pcl::PointIndices::Ptr inliers;
-    pcl::ExtractIndices<pcl::PointXYZ> extract;
+    pcl::ExtractIndices<PointT> extract;
     pcl::visualization::PCLVisualizer::Ptr viewer;
-    pcl::PassThrough<pcl::PointXYZ> pass;
-    pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
-    pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
-    pcl::ConditionalRemoval<pcl::PointXYZ> cor;
-    pcl::MomentOfInertiaEstimation<pcl::PointXYZ> feature_extractor;
+    pcl::PassThrough<PointT> pass;
+    pcl::StatisticalOutlierRemoval<PointT> sor;
+    pcl::RadiusOutlierRemoval<PointT> ror;
+    pcl::ConditionalRemoval<PointT> cor;
+    pcl::MomentOfInertiaEstimation<PointT> feature_extractor;
 };
 
 int main()
