@@ -34,15 +34,20 @@ public:
     pcl::Kmeans::Centroids centroids;
     std::vector<pcl::PointIndices> cluster_indices;
     std::vector<pcl::PointCloud<PointT>::Ptr> clusters;
-    int cluster_i = 0;
-    int centroid_i = 0;
+
     PointCloudAnalyzer() : cloud(new pcl::PointCloud<PointT>),
                            cloud_filtered(new pcl::PointCloud<PointT>),
                            coefficients(new pcl::ModelCoefficients),
                            inliers(new pcl::PointIndices),
                            tree(new pcl::search::KdTree<PointT>),
-                           viewer(new pcl::visualization::PCLVisualizer("Cluster Viewer"))
+                           viewer(new pcl::visualization::PCLVisualizer("Cluster Viewer")),
+                           cluster_i(0), centroid_i(0)
     {
+    }
+
+    ~PointCloudAnalyzer()
+    {
+        viewer->close();
     }
 
     struct SACParams
@@ -222,8 +227,8 @@ public:
         reg.setSmoothnessThreshold(params.smoothness_threshold / 180.0 * M_PI);
         reg.setCurvatureThreshold(params.curvature_threshold);
         reg.setInputCloud(point_cloud);
-        // std::vector<pcl::PointIndices> clusters;  
-        // reg.extract(clusters);      
+        // std::vector<pcl::PointIndices> clusters;
+        // reg.extract(clusters);
         point_cloud = reg.getColoredCloud();
     }
 
@@ -512,6 +517,7 @@ private:
     pcl::RadiusOutlierRemoval<PointT> ror;
     pcl::ConditionalRemoval<PointT> cor;
     pcl::MomentOfInertiaEstimation<PointT> feature_extractor;
+    int cluster_i, centroid_i;
 };
 
 int main()

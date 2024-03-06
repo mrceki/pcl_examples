@@ -1,5 +1,6 @@
 pcd_filepath: "/home/cenk/pcl_examples/clouds/euro_pallet.pcd"
 output_pcd_filepath: "/home/cenk/pcl_examples/clouds/results/"
+
 sac_params:
   optimize_coefficients: true
   model_type: 0
@@ -24,6 +25,16 @@ cluster_sac_params:
   normal_axis: [0.0, 0.0, 1.0]
   angle_threshold: 10.0
 
+region_growing_params:
+  min_cluster_size: 50
+  max_cluster_size: 25000
+  number_of_neighbours: 30
+  distance_threshold: 1
+  point_color_threshold: 6
+  region_color_threshold: 5
+  smoothness_threshold: 3.0
+  curvature_threshold: 1.0
+
 ec_params:
   cluster_tolerance: 0.015
   min_cluster_size: 200
@@ -36,13 +47,13 @@ visualization_point_size: 3
 passthrough_filter:
   - field: x
     limit_min: -3.0
-    limit_max: 3.0
+    limit_max: 5.0
   - field: y
     limit_min: -3.0
     limit_max: 3.0
   - field: z
     limit_min: -3.0
-    limit_max: 3.0
+    limit_max: 0.30
 
 conditional_removal:
   - field: z
