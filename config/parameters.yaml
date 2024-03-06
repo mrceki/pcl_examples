@@ -1,4 +1,4 @@
-pcd_filepath: "/home/cenk/pcl_examples/clouds/euro_pallet.pcd"
+pcd_filepath: "/home/cenk/catkin_ws/src/pcl_interface/clouds/euro_pallet.pcd"
 output_pcd_filepath: "/home/cenk/pcl_examples/clouds/results/"
 
 sac_params:

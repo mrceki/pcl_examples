@@ -1,25 +1,49 @@
-cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
-project(pcl_examples)
+cmake_minimum_required(VERSION 3.0.2)
+project(pcl_interface)
 
-find_package(PCL 1.14 REQUIRED)
+add_compile_options(-std=c++17)
+
 find_package(yaml-cpp REQUIRED)
 
-include_directories(${PCL_INCLUDE_DIRS})
-link_directories(${PCL_LIBRARY_DIRS})
-add_definitions(${PCL_DEFINITIONS})
+find_package(catkin REQUIRED COMPONENTS
+	roscpp
+	pcl_ros
+	pcl_conversions
+)
 
-function(demo name)
-	add_executable(${name} src/${name}.cpp)
-	#add_dependencies(${name} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-	target_link_libraries(${name} ${PCL_LIBRARIES} yaml-cpp)
-	#target_include_directories(${name} SYSTEM PUBLIC ${catkin_INCLUDE_DIRS})
-	# set_target_properties(${name} PROPERTIES OUTPUT_NAME ${name} PREFIX "")
-	# install(TARGETS ${name}
-		# ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-		# LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-		# RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-	# )
-endfunction()
+catkin_package(
+	INCLUDE_DIRS include
+	LIBRARIES pcl_interface
+	CATKIN_DEPENDS roscpp pcl_ros pcl_conversions 
+)
 
-demo (3d_recognition)
-demo (pallet)
+include_directories(
+	include
+	${catkin_INCLUDE_DIRS}
+	${YAML_CPP_INCLUDE_DIRS}
+)
+
+add_library(${PROJECT_NAME}
+	src/pcl_interface.cpp
+)
+
+# target_link_libraries(${PROJECT_NAME} ${YAML_CPP_LIBRARIES})
+
+add_executable(detection src/main.cpp)
+# add_dependencies(detection ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(detection
+	${PROJECT_NAME}
+	${catkin_LIBRARIES}
+	${YAML_CPP_LIBRARIES}
+)
+
+install(TARGETS detection
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
+)
+
+install(DIRECTORY include/${PROJECT_NAME}/
+	DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+	FILES_MATCHING PATTERN "*.h"
+)
