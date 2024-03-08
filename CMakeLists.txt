@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
 	roscpp
 	pcl_ros
 	pcl_conversions
+	sensor_msgs
 )
 
 catkin_package(
