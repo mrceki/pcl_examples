@@ -10,6 +10,7 @@ PointCloudInterface::PointCloudInterface() : cloud(new pcl::PointCloud<PointT>),
                                              coefficients(new pcl::ModelCoefficients),
                                              inliers(new pcl::PointIndices),
                                              tree(new pcl::search::KdTree<PointT>),
+                                             ros_cloud(new pcl::PointCloud<PointT>),
                                             //  viewer(new pcl::visualization::PCLVisualizer("Cluster Viewer")),
                                              cluster_i(0), centroid_i(0)
 {
@@ -299,6 +300,16 @@ auto PointCloudInterface::mergeClouds(pcl::PointCloud<PointT>::Ptr cloud1, pcl::
     pcl::PointCloud<PointT>::Ptr combined_cloud(new pcl::PointCloud<PointT>);
     *combined_cloud = *cloud1 + *cloud2;
     return combined_cloud;
+}
+
+void PointCloudInterface::writeClusters(pcl::PointCloud<PointT>::Ptr cloud_cluster, Parameters &params)
+{
+    cloud_cluster->width = cloud_cluster->size();
+    cloud_cluster->height = 1;
+    cloud_cluster->is_dense = true;
+    std::string cluster_index = std::to_string(cluster_i);
+    writer.write<PointT>(params.output_pcd_filepath + "cloud_cluster_" + cluster_index + ".pcd", *cloud_cluster, false);
+    std::cout << "Cluster writing completed." << std::endl;
 }
 
 // void PointCloudInterface::visualizeCluster(pcl::PointCloud<PointT>::Ptr point_cloud, Centroids centroids, Parameters &params)

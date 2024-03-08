@@ -29,6 +29,7 @@ public:
     typedef pcl::PointXYZRGB PointT;
     typedef pcl::Kmeans::Centroids Centroids;
     pcl::PointCloud<PointT>::Ptr cloud;
+    pcl::PointCloud<PointT>::Ptr ros_cloud;
     pcl::PointCloud<PointT>::Ptr cloud_cluster;
     pcl::Kmeans::Centroids centroids;
     std::vector<pcl::PointIndices> cluster_indices;
