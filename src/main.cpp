@@ -1,39 +1,92 @@
 #include "pcl_interface/pcl_interface.h"
+#include <ros/ros.h>
+#include <tf/transform_broadcaster.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <pcl_conversions/pcl_conversions.h>
 
-int main(){
-    PointCloudInterface pcl;
-    PointCloudInterface::Parameters params;
-
-    try
+class PointCloudHandler
+{
+public:
+    PointCloudHandler(ros::NodeHandle &nh) : nh_(nh)
     {
-        pcl.setParametersFromYAML(params, "/home/cenk/catkin_ws/src/pcl_interface/config/parameters.yaml");
+        sub_ = nh.subscribe("camera1/depth/color/points", 1, &PointCloudHandler::cloudCallback, this);
+        pub_ = nh.advertise<sensor_msgs::PointCloud2>("filtered_clusters", 1);
     }
-    catch (const YAML::Exception &e)
+
+    void setParametersFromYAML(const std::string &yaml_file)
     {
-        std::cerr << "YAML parsing error: " << e.what() << std::endl;
+        try
+        {
+            pcl_.setParametersFromYAML(params_, yaml_file);
+        }
+        catch (const YAML::Exception &e)
+        {
+            std::cerr << "YAML parsing error: " << e.what() << std::endl;
+        }
     }
 
-    pcl.loadPCD(params.pcd_filepath);
-    std::cout << "PointCloud loaded." << std::endl;
+private:
+    typedef PointCloudInterface::PointT PointT;
 
-    pcl.passthroughFilterCloud(pcl.cloud, params.filter_params);
-    pcl.conditionalRemoval(pcl.cloud, params);
-    pcl.downsample(pcl.cloud, params.downsample_leaf_size);
-    pcl.segmentPlane(pcl.cloud, params.sac_params);
-    std::cout << "PointCloud representing the planar component: " << pcl.cloud->size() << " data points." << std::endl;
-    pcl.regionGrowing(pcl.cloud, params.region_growing_params);
-    pcl.extractClusters(pcl.cloud, params.ec_params);
-    pcl.createNewCloudFromIndicies(pcl.cluster_indices, pcl.cloud_cluster, params.sac_params.min_indices);
-
-    for (const auto &cluster : pcl.clusters)
+    void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &cloud_msg)
     {
-        std::cout << "Cluster size: " << cluster->size() << std::endl;
-        pcl.segmentPlane(cluster, params.cluster_sac_params);
-        pcl.performKMeans(cluster, params.kmeans_cluster_size);
-        pcl.momentOfInertia(cluster, params.moment_of_inertia_params);
-        // pcl.writeClusters(cluster, params);
-        // pcl.visualizeCluster(cluster, pcl.centroids, params);
+        pcl::PCLPointCloud2 pcl_pc2;
+        pcl_conversions::toPCL(*cloud_msg, pcl_pc2);
+        pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
+        pcl::fromPCLPointCloud2(pcl_pc2, *cloud);
+        pcl_.cloud = cloud;
+        pcl_.passthroughFilterCloud(pcl_.cloud, params_.filter_params);
+        pcl_.downsample(pcl_.cloud, params_.downsample_leaf_size);
+        pcl_.segmentPlane(pcl_.cloud, params_.sac_params);
+        pcl_.regionGrowing(pcl_.cloud, params_.region_growing_params);
+        pcl_.extractClusters(pcl_.cloud, params_.ec_params);
+        pcl_.createNewCloudFromIndicies(pcl_.cluster_indices, pcl_.cloud_cluster, params_.sac_params.min_indices);
+        sensor_msgs::PointCloud2 filtered_clusters_msg;
+        std::vector<tf::StampedTransform> transforms;
+        int i = 0;
+        for (const auto &cluster : pcl_.clusters)
+        {
+            pcl_.segmentPlane(cluster, params_.cluster_sac_params);
+            pcl_.performKMeans(cluster, params_.kmeans_cluster_size);
+            pcl_.momentOfInertia(cluster, params_.moment_of_inertia_params);
+            *pcl_.ros_cloud += *cluster;
+            tf::Transform transform;
+            transform.setOrigin(tf::Vector3(cluster->points[0].z, cluster->points[0].x, cluster->points[0].y));
+            tf::Quaternion q;
+            q.setRPY(0, 0, 0);
+            transform.setRotation(q);
+            std::string cluster_frame_name = "cluster_frame_";
+            tf::StampedTransform stampedTransform(transform, ros::Time::now(), "camera_link", cluster_frame_name);
+            transforms.push_back(stampedTransform);
+            i++;
+        }
+
+        static tf::TransformBroadcaster br;
+        br.sendTransform(transforms);
+        transforms.clear();
+
+        pcl::toROSMsg(*pcl_.ros_cloud, filtered_clusters_msg);
+        filtered_clusters_msg.header.frame_id = "base_link";
+        filtered_clusters_msg.header.stamp = ros::Time::now();
+        pub_.publish(filtered_clusters_msg);
     }
+
+    ros::NodeHandle nh_;
+    ros::Subscriber sub_;
+    ros::Publisher pub_;
+    PointCloudInterface pcl_;
+    PointCloudInterface::Parameters params_;
+};
+
+int main(int argc, char **argv)
+{
+    ros::init(argc, argv, "pcl_interface");
+    ros::NodeHandle nh;
+
+    PointCloudHandler handler(nh);
+    handler.setParametersFromYAML("/home/cenk/catkin_ws/src/pcl_interface/config/parameters.yaml");
+
+    ros::spin();
 
     return 0;
 }
