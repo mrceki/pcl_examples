@@ -3,6 +3,7 @@
 #include <tf/transform_broadcaster.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/common/transforms.h>
 
 class PointCloudHandler
 {
@@ -35,6 +36,16 @@ private:
         pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
         pcl::fromPCLPointCloud2(pcl_pc2, *cloud);
         pcl_.cloud = cloud;
+
+        double theta_x = M_PI / 2.0; 
+        double theta_y = M_PI / 2.0; 
+        double theta_z = M_PI / 1.0; 
+        Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+        transform.rotate(Eigen::AngleAxisf(theta_x, Eigen::Vector3f::UnitX()));
+        transform.rotate(Eigen::AngleAxisf(theta_y, Eigen::Vector3f::UnitY()));
+        transform.rotate(Eigen::AngleAxisf(theta_z, Eigen::Vector3f::UnitZ()));
+        pcl::transformPointCloud(*pcl_.cloud, *pcl_.cloud, transform);
+
         pcl_.passthroughFilterCloud(pcl_.cloud, params_.filter_params);
         pcl_.downsample(pcl_.cloud, params_.downsample_leaf_size);
         pcl_.segmentPlane(pcl_.cloud, params_.sac_params);
@@ -43,18 +54,19 @@ private:
         pcl_.createNewCloudFromIndicies(pcl_.cluster_indices, pcl_.cloud_cluster, params_.sac_params.min_indices);
         sensor_msgs::PointCloud2 filtered_clusters_msg;
         std::vector<tf::StampedTransform> transforms;
+        pcl_.ros_cloud->clear();
         int i = 0;
         for (const auto &cluster : pcl_.clusters)
         {
             pcl_.segmentPlane(cluster, params_.cluster_sac_params);
             pcl_.performKMeans(cluster, params_.kmeans_cluster_size);
             pcl_.momentOfInertia(cluster, params_.moment_of_inertia_params);
-            *pcl_.ros_cloud += *cluster;
+            
             tf::Transform transform;
             transform.setOrigin(tf::Vector3(cluster->points[0].z, cluster->points[0].x, cluster->points[0].y));
             tf::Quaternion q;
-            q.setRPY(0, 0, 0);
             transform.setRotation(q);
+            *pcl_.ros_cloud += *cluster;
             std::string cluster_frame_name = "cluster_frame_";
             tf::StampedTransform stampedTransform(transform, ros::Time::now(), "camera_link", cluster_frame_name);
             transforms.push_back(stampedTransform);
@@ -66,7 +78,7 @@ private:
         transforms.clear();
 
         pcl::toROSMsg(*pcl_.ros_cloud, filtered_clusters_msg);
-        filtered_clusters_msg.header.frame_id = "base_link";
+        filtered_clusters_msg.header.frame_id = "camera_link";
         filtered_clusters_msg.header.stamp = ros::Time::now();
         pub_.publish(filtered_clusters_msg);
     }
