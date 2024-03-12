@@ -10,6 +10,11 @@ find_package(catkin REQUIRED COMPONENTS
 	pcl_ros
 	pcl_conversions
 	sensor_msgs
+	dynamic_reconfigure
+)
+
+generate_dynamic_reconfigure_options(
+  cfg/Parameters.cfg
 )
 
 catkin_package(
@@ -31,7 +36,7 @@ add_library(${PROJECT_NAME}
 # target_link_libraries(${PROJECT_NAME} ${YAML_CPP_LIBRARIES})
 
 add_executable(detection src/main.cpp)
-# add_dependencies(detection ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(detection ${PROJECT_NAME}_gencfg)
 target_link_libraries(detection
 	${PROJECT_NAME}
 	${catkin_LIBRARIES}
@@ -48,3 +53,4 @@ install(DIRECTORY include/${PROJECT_NAME}/
 	DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 	FILES_MATCHING PATTERN "*.h"
 )
+

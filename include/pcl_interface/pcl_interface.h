@@ -22,6 +22,7 @@
 #include <pcl/ml/kmeans.h>
 #include <pcl/common/impl/angles.hpp>
 #include <yaml-cpp/yaml.h>
+#include <pcl_interface/ParametersConfig.h>
 
 class PointCloudInterface
 {
@@ -127,7 +128,7 @@ public:
 
     PointCloudInterface();
     ~PointCloudInterface();
-
+    void reconfigureCallback(pcl_interface::ParametersConfig &config, uint32_t level);
     void loadPCD(const std::string &filename);
     void downsample(pcl::PointCloud<PointT>::Ptr point_cloud, float leaf_size);
     void segmentPlane(pcl::PointCloud<PointT>::Ptr point_cloud, SACParams params);

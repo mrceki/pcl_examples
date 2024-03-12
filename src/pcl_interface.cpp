@@ -258,7 +258,7 @@ void PointCloudInterface::passthroughFilterCloud(pcl::PointCloud<PointT>::Ptr po
         pass.setInputCloud(point_cloud);
         pass.setFilterFieldName(field.field);
         pass.setFilterLimits(field.limit_min, field.limit_max);
-        pass.filter(*cloud_filtered);
+        pass.filter(*point_cloud);
     }
 }
 
@@ -267,7 +267,7 @@ void PointCloudInterface::statisticalOutlierRemoval(pcl::PointCloud<PointT>::Ptr
     sor.setInputCloud(point_cloud);
     sor.setMeanK(params.sor_params.mean_k);
     sor.setStddevMulThresh(params.sor_params.stddev_mul_thresh);
-    sor.filter(*cloud_filtered);
+    sor.filter(*point_cloud);
 }
 
 void PointCloudInterface::radiusOutlierRemoval(pcl::PointCloud<PointT>::Ptr point_cloud, Parameters &params)
@@ -276,7 +276,7 @@ void PointCloudInterface::radiusOutlierRemoval(pcl::PointCloud<PointT>::Ptr poin
     ror.setRadiusSearch(params.ror_params.radius_search);
     ror.setMinNeighborsInRadius(params.ror_params.min_neighbors_in_radius);
     ror.setKeepOrganized(params.ror_params.keep_organized);
-    ror.filter(*cloud_filtered);
+    ror.filter(*point_cloud);
 }
 
 void PointCloudInterface::conditionalRemoval(pcl::PointCloud<PointT>::Ptr point_cloud, Parameters &params)
@@ -292,7 +292,7 @@ void PointCloudInterface::conditionalRemoval(pcl::PointCloud<PointT>::Ptr point_
     cor.setCondition(range_cond);
     cor.setInputCloud(point_cloud);
     cor.setKeepOrganized(true);
-    cor.filter(*cloud_filtered);
+    cor.filter(*point_cloud);
 }
 
 auto PointCloudInterface::mergeClouds(pcl::PointCloud<PointT>::Ptr cloud1, pcl::PointCloud<PointT>::Ptr cloud2)

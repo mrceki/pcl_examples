@@ -14,7 +14,8 @@
     <exec_depend>roscpp</exec_depend>
     <exec_depend>pcl_ros</exec_depend>
     <exec_depend>pcl_conversions</exec_depend> 
-
+    <build_depend>dynamic_reconfigure</build_depend>
+    <exec_depend>dynamic_reconfigure</exec_depend>
     <export>
         <build_type>catkin</build_type>
     </export>
