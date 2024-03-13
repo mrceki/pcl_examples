@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 	pcl_conversions
 	sensor_msgs
 	dynamic_reconfigure
+	dolly_pose_estimation
 )
 
 generate_dynamic_reconfigure_options(
@@ -20,7 +21,7 @@ generate_dynamic_reconfigure_options(
 catkin_package(
 	INCLUDE_DIRS include
 	LIBRARIES pcl_interface
-	CATKIN_DEPENDS roscpp pcl_ros pcl_conversions 
+	CATKIN_DEPENDS roscpp pcl_ros pcl_conversions dolly_pose_estimation
 )
 
 include_directories(

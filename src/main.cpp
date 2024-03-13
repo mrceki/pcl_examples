@@ -5,7 +5,7 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/common/transforms.h>
 #include <dynamic_reconfigure/server.h>
-
+#include <dolly_pose_estimation/DollyPoseEstimate.h>
 class PointCloudHandler
 {
 public:
@@ -13,6 +13,7 @@ public:
     {
         sub_ = nh.subscribe("camera1/depth/color/points", 1, &PointCloudHandler::cloudCallback, this);
         pub_ = nh.advertise<sensor_msgs::PointCloud2>("filtered_clusters", 1);
+        dolly_client_ = nh.serviceClient<dolly_pose_estimation::DollyPoseEstimate>("/dolly_pose_estimation");
         dynamic_reconfigure::Server<pcl_interface::ParametersConfig> *server = new dynamic_reconfigure::Server<pcl_interface::ParametersConfig>;
         dynamic_reconfigure::Server<pcl_interface::ParametersConfig>::CallbackType f;
         f = boost::bind(&PointCloudHandler::reconfigureCallback, this, _1, _2);
@@ -112,6 +113,8 @@ private:
         pcl_.extractClusters(pcl_.cloud, params_.ec_params);
         pcl_.createNewCloudFromIndicies(pcl_.cluster_indices, pcl_.cloud_cluster, params_.sac_params.min_indices);
         int i = 0;
+        geometry_msgs::PoseArray pose_array;
+        dolly_pose_estimation::DollyPoseEstimate dolly_srv;
         for (const auto &cluster : pcl_.clusters)
         {
             pcl_.segmentPlane(cluster, params_.cluster_sac_params);
@@ -124,7 +127,30 @@ private:
             cluster_frame_name = "cluster_frame_" + std::to_string(i);
             tf::StampedTransform stampedTransform(transformTf, ros::Time::now(), "camera_link", cluster_frame_name);
             tf_transforms.push_back(stampedTransform);
+            pose_array.header.frame_id = "camera_link";
+            pose_array.header.stamp = ros::Time::now();
+            geometry_msgs::Pose pose;
+            pose.position.x = cluster->points[0].x;
+            pose.position.y = cluster->points[0].y;
+            pose.position.z = cluster->points[0].z;
+            pose.orientation.x = 0;
+            pose.orientation.y = 0;
+            pose.orientation.z = 0;
+            pose.orientation.w = 1;
+            pose_array.poses.push_back(pose);
             i++;
+        }
+        dolly_srv.request.cluster_poses = pose_array;
+        
+        if (!pose_array.poses.empty()){
+            if (dolly_client_.call(dolly_srv))
+            {
+                ROS_INFO("Cluster poses request successful");
+            }
+            else
+            {
+                ROS_ERROR("Failed to call cluster poses request");
+            }
         }
 
         br.sendTransform(tf_transforms);
@@ -135,6 +161,7 @@ private:
         filtered_clusters_msg.header.stamp = ros::Time::now();
         pub_.publish(filtered_clusters_msg);
         clearClouds(pcl_);
+
     }
 
     void clearClouds(class PointCloudInterface &pcl)
@@ -148,6 +175,7 @@ private:
     ros::NodeHandle nh_;
     ros::Subscriber sub_;
     ros::Publisher pub_;
+    ros::ServiceClient dolly_client_;
     Eigen::Affine3f transform;
     std::vector<tf::StampedTransform> tf_transforms;
     sensor_msgs::PointCloud2 filtered_clusters_msg;

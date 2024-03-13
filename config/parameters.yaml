@@ -40,20 +40,20 @@ ec_params:
   min_cluster_size: 200
   max_cluster_size: 25000
 
-downsample_leaf_size: 0.01
+downsample_leaf_size: 0.007
 kmeans_cluster_size: 2
 visualization_point_size: 3
 
 passthrough_filter:
   - field: x
     limit_min: -3.0
-    limit_max: 5.0
+    limit_max: 3.0
   - field: y
     limit_min: -3.0
-    limit_max: 3.0
+    limit_max: 2.0
   - field: z
-    limit_min: -3.0
-    limit_max: 0.30
+    limit_min: -2.0
+    limit_max: 0.2
 
 conditional_removal:
   - field: z
