@@ -11,15 +11,15 @@ class PointCloudHandler
 public:
     PointCloudHandler(ros::NodeHandle &nh) : nh_(nh)
     {
+        sub_ = nh.subscribe("camera1/depth/color/points", 1, &PointCloudHandler::cloudCallback, this);
+        pub_ = nh.advertise<sensor_msgs::PointCloud2>("filtered_clusters", 1);
         dynamic_reconfigure::Server<pcl_interface::ParametersConfig> *server = new dynamic_reconfigure::Server<pcl_interface::ParametersConfig>;
         dynamic_reconfigure::Server<pcl_interface::ParametersConfig>::CallbackType f;
         f = boost::bind(&PointCloudHandler::reconfigureCallback, this, _1, _2);
         server->setCallback(f);
-        sub_ = nh.subscribe("camera1/depth/color/points", 1, &PointCloudHandler::cloudCallback, this);
-        pub_ = nh.advertise<sensor_msgs::PointCloud2>("filtered_clusters", 1);
     }
 
-    void setParametersFromYAML(const std::string &yaml_file)
+    void setParameters(const std::string &yaml_file)
     {
         try
         {
@@ -36,10 +36,12 @@ private:
 
     void reconfigureCallback(pcl_interface::ParametersConfig &config, uint32_t level)
     {
-        params_.filter_params.passthrough_filter_fields.push_back({"x", config.groups.passthrough_filter.x_limit_min, config.groups.passthrough_filter.x_limit_max});
-        params_.filter_params.passthrough_filter_fields.push_back({"y", config.groups.passthrough_filter.y_limit_min, config.groups.passthrough_filter.y_limit_max});
-        params_.filter_params.passthrough_filter_fields.push_back({"z", config.groups.passthrough_filter.z_limit_min, config.groups.passthrough_filter.z_limit_max});
-        params_.filter_params.conditional_removal_fields.push_back({"z", config.groups.conditional_removal.conditional_z_limit_min, config.groups.conditional_removal.conditional_z_limit_max});
+        params_.filter_params.passthrough_filter_fields.clear();
+        params_.filter_params.passthrough_filter_fields.push_back({"x", config.x_limit_min, config.x_limit_max});
+        params_.filter_params.passthrough_filter_fields.push_back({"y", config.y_limit_min, config.y_limit_max});
+        params_.filter_params.passthrough_filter_fields.push_back({"z", config.z_limit_min, config.z_limit_max});
+        params_.filter_params.conditional_removal_fields.clear();
+        params_.filter_params.conditional_removal_fields.push_back({"z", config.conditional_z_limit_min, config.conditional_z_limit_max});
 
         params_.downsample_leaf_size = config.downsample_leaf_size;
         params_.kmeans_cluster_size = config.kmeans_cluster_size;
@@ -97,7 +99,7 @@ private:
         double theta_x = M_PI / 2.0; 
         double theta_y = M_PI / 2.0; 
         double theta_z = M_PI / 1.0; 
-        Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+        transform = Eigen::Affine3f::Identity();
         transform.rotate(Eigen::AngleAxisf(theta_x, Eigen::Vector3f::UnitX()));
         transform.rotate(Eigen::AngleAxisf(theta_y, Eigen::Vector3f::UnitY()));
         transform.rotate(Eigen::AngleAxisf(theta_z, Eigen::Vector3f::UnitZ()));
@@ -106,45 +108,55 @@ private:
         pcl_.passthroughFilterCloud(pcl_.cloud, params_.filter_params);
         pcl_.downsample(pcl_.cloud, params_.downsample_leaf_size);
         pcl_.segmentPlane(pcl_.cloud, params_.sac_params);
-        pcl_.regionGrowing(pcl_.cloud, params_.region_growing_params);
+        // pcl_.regionGrowing(pcl_.cloud, params_.region_growing_params);
         pcl_.extractClusters(pcl_.cloud, params_.ec_params);
         pcl_.createNewCloudFromIndicies(pcl_.cluster_indices, pcl_.cloud_cluster, params_.sac_params.min_indices);
-        sensor_msgs::PointCloud2 filtered_clusters_msg;
-        std::vector<tf::StampedTransform> transforms;
-        pcl_.ros_cloud->clear();
         int i = 0;
         for (const auto &cluster : pcl_.clusters)
         {
             pcl_.segmentPlane(cluster, params_.cluster_sac_params);
             pcl_.performKMeans(cluster, params_.kmeans_cluster_size);
             pcl_.momentOfInertia(cluster, params_.moment_of_inertia_params);
-            
-            tf::Transform transform;
-            transform.setOrigin(tf::Vector3(cluster->points[0].z, cluster->points[0].x, cluster->points[0].y));
-            tf::Quaternion q;
-            transform.setRotation(q);
+            transformTf.setOrigin(tf::Vector3(cluster->points[0].x, cluster->points[0].y, cluster->points[0].z));
+            q.setRPY(0, 0, 0);
+            transformTf.setRotation(q);
             *pcl_.ros_cloud += *cluster;
-            std::string cluster_frame_name = "cluster_frame_";
-            tf::StampedTransform stampedTransform(transform, ros::Time::now(), "camera_link", cluster_frame_name);
-            transforms.push_back(stampedTransform);
+            cluster_frame_name = "cluster_frame_" + std::to_string(i);
+            tf::StampedTransform stampedTransform(transformTf, ros::Time::now(), "camera_link", cluster_frame_name);
+            tf_transforms.push_back(stampedTransform);
             i++;
         }
 
-        static tf::TransformBroadcaster br;
-        br.sendTransform(transforms);
-        transforms.clear();
-        filtered_clusters_msg.data.clear();
+        br.sendTransform(tf_transforms);
+        tf_transforms.clear();
+
         pcl::toROSMsg(*pcl_.ros_cloud, filtered_clusters_msg);
         filtered_clusters_msg.header.frame_id = "camera_link";
         filtered_clusters_msg.header.stamp = ros::Time::now();
         pub_.publish(filtered_clusters_msg);
+        clearClouds(pcl_);
+    }
+
+    void clearClouds(class PointCloudInterface &pcl)
+    {
+        pcl.ros_cloud.reset(new pcl::PointCloud<PointT>());
+        pcl.clusters.clear();
+        pcl.cluster_indices.clear();
+        pcl.cloud_cluster.reset(new pcl::PointCloud<PointT>());
     }
 
     ros::NodeHandle nh_;
     ros::Subscriber sub_;
     ros::Publisher pub_;
+    Eigen::Affine3f transform;
+    std::vector<tf::StampedTransform> tf_transforms;
+    sensor_msgs::PointCloud2 filtered_clusters_msg;
     PointCloudInterface pcl_;
     PointCloudInterface::Parameters params_;
+    tf::TransformBroadcaster br;
+    tf::Transform transformTf;
+    tf::Quaternion q;
+    std::string cluster_frame_name;
 };
 
 int main(int argc, char **argv)
@@ -153,7 +165,7 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
 
     PointCloudHandler handler(nh);
-    handler.setParametersFromYAML("/home/cenk/catkin_ws/src/pcl_interface/config/parameters.yaml");
+    handler.setParameters("/home/cenk/catkin_ws/src/pcl_interface/config/parameters.yaml");
 
     ros::spin();
 
