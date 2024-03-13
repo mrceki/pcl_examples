@@ -16,6 +16,8 @@
     <exec_depend>pcl_conversions</exec_depend> 
     <build_depend>dynamic_reconfigure</build_depend>
     <exec_depend>dynamic_reconfigure</exec_depend>
+    <build_depend>dolly_pose_estimation</build_depend>
+    <exec_depend>dolly_pose_estimation</exec_depend>
     <export>
         <build_type>catkin</build_type>
     </export>
