@@ -142,7 +142,7 @@ private:
         }
         dolly_srv.request.cluster_poses = pose_array;
         
-        if (!pose_array.poses.empty()){
+        if (!pose_array.poses.empty() && pose_array.poses.size() >= 4){
             if (dolly_client_.call(dolly_srv))
             {
                 ROS_INFO("Cluster poses request successful");
@@ -151,6 +151,10 @@ private:
             {
                 ROS_ERROR("Failed to call cluster poses request");
             }
+        }
+        else
+        {
+            ROS_WARN("Not enough cluster poses to call service request");
         }
 
         br.sendTransform(tf_transforms);
