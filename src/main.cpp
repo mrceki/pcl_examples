@@ -89,6 +89,11 @@ private:
         params_.ror_params.radius_search = config.groups.radius_outlier_removal.ror_radius_search;
         params_.ror_params.min_neighbors_in_radius = config.groups.radius_outlier_removal.ror_min_neighbors_in_radius;
         params_.ror_params.keep_organized = config.groups.radius_outlier_removal.ror_keep_organized;
+
+        params_.color_filter_params.color_params.clear();
+        params_.color_filter_params.color_params.push_back({"r", config.groups.color_params.r_min, config.groups.color_params.r_max});
+        params_.color_filter_params.color_params.push_back({"g", config.groups.color_params.g_min, config.groups.color_params.g_max});
+        params_.color_filter_params.color_params.push_back({"b", config.groups.color_params.b_min, config.groups.color_params.b_max});
     }
 
     void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &cloud_msg)
@@ -141,8 +146,9 @@ private:
             i++;
         }
         dolly_srv.request.cluster_poses = pose_array;
-        
-        if (!pose_array.poses.empty() && pose_array.poses.size() >= 4){
+
+        if (!pose_array.poses.empty() && pose_array.poses.size() >= 4)
+        {
             if (dolly_client_.call(dolly_srv))
             {
                 ROS_INFO("Cluster poses request successful");
@@ -165,7 +171,6 @@ private:
         filtered_clusters_msg.header.stamp = ros::Time::now();
         pub_.publish(filtered_clusters_msg);
         clearClouds(pcl_);
-
     }
 
     void clearClouds(class PointCloudInterface &pcl)
