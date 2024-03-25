@@ -110,6 +110,17 @@ public:
         bool keep_organized;
     };
 
+    struct ColorParams
+    {
+        std::string color;
+        int limit_min, limit_max;
+    };
+
+    struct ColorFilterParams
+    {
+        std::vector<ColorParams> color_params;
+    };
+    
     struct Parameters
     {
         std::string pcd_filepath, output_pcd_filepath;
@@ -121,6 +132,7 @@ public:
         MomentOfInertiaParams moment_of_inertia_params;
         SORParams sor_params;
         RORParams ror_params;
+        ColorFilterParams color_filter_params;
         float downsample_leaf_size;
         int kmeans_cluster_size;
         int visualization_point_size;
@@ -141,6 +153,7 @@ public:
     void statisticalOutlierRemoval(pcl::PointCloud<PointT>::Ptr point_cloud, Parameters &params);
     void radiusOutlierRemoval(pcl::PointCloud<PointT>::Ptr point_cloud, Parameters &params);
     void conditionalRemoval(pcl::PointCloud<PointT>::Ptr point_cloud, Parameters &params);
+    void colorFilter(pcl::PointCloud<PointT>::Ptr point_cloud, Parameters &params);
     auto mergeClouds(pcl::PointCloud<PointT>::Ptr cloud1, pcl::PointCloud<PointT>::Ptr cloud2);
     // void visualizeCluster(pcl::PointCloud<PointT>::Ptr point_cloud, Centroids centroids, Parameters &params);
     void visualiseMomentOfInertia(MomentOfInertiaParams p);

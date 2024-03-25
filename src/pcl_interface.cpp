@@ -34,6 +34,7 @@ void PointCloudInterface::setParametersFromYAML(PointCloudInterface::Parameters 
         YAML::Node config = YAML::LoadFile(yaml_file);
         YAML::Node passthrougFilter = config["passthrough_filter"];
         YAML::Node conditionalRemoval = config["conditional_removal"];
+        YAML::Node colorFilterParams = config["color_filter"];
         params.pcd_filepath = config["pcd_filepath"].as<std::string>();
         params.output_pcd_filepath = config["output_pcd_filepath"].as<std::string>();
 
@@ -94,6 +95,17 @@ void PointCloudInterface::setParametersFromYAML(PointCloudInterface::Parameters 
         params.ror_params.radius_search = config["radius_outlier_removal"]["radius_search"].as<float>();
         params.ror_params.min_neighbors_in_radius = config["radius_outlier_removal"]["min_neighbors_in_radius"].as<int>();
         params.ror_params.keep_organized = config["radius_outlier_removal"]["keep_organized"].as<bool>();
+
+        auto parseColorFilterParams = [&](const YAML::Node &node, std::vector<PointCloudInterface::ColorParams> &paramsVector)
+        {
+            for (const auto &config : node)
+            {
+                paramsVector.push_back({config["color"].as<std::string>(),
+                                        config["limit_min"].as<float>(),
+                                        config["limit_max"].as<float>()});
+            }
+        };
+        parseColorFilterParams(colorFilterParams, params.color_filter_params.color_params);
     }
 
 void PointCloudInterface::downsample(pcl::PointCloud<PointT>::Ptr point_cloud, float leaf_size)
@@ -293,6 +305,24 @@ void PointCloudInterface::conditionalRemoval(pcl::PointCloud<PointT>::Ptr point_
     cor.setInputCloud(point_cloud);
     cor.setKeepOrganized(true);
     cor.filter(*point_cloud);
+}
+
+void PointCloudInterface::colorFilter(pcl::PointCloud<PointT>::Ptr point_cloud, Parameters &params)
+{
+    pcl::PointCloud<PointT>::Ptr filtered_cloud(new pcl::PointCloud<PointT>);
+    pcl::ConditionAnd<PointT>::Ptr color_cond(new pcl::ConditionAnd<PointT>());
+    for (auto field : params.color_filter_params.color_params)
+    {
+        pcl::PackedRGBComparison<PointT>::ConstPtr color_comp_gt(new pcl::PackedRGBComparison<PointT>(field.color, pcl::ComparisonOps::GT, field.limit_min));
+        pcl::PackedRGBComparison<PointT>::ConstPtr color_comp_lt(new pcl::PackedRGBComparison<PointT>(field.color, pcl::ComparisonOps::LT, field.limit_max));
+        color_cond->addComparison(color_comp_gt);
+        color_cond->addComparison(color_comp_lt);
+    }
+    pcl::ConditionalRemoval<PointT> color_filter;
+    color_filter.setCondition(color_cond);
+    color_filter.setInputCloud(point_cloud);
+    color_filter.setKeepOrganized(true);
+    color_filter.filter(*point_cloud);
 }
 
 auto PointCloudInterface::mergeClouds(pcl::PointCloud<PointT>::Ptr cloud1, pcl::PointCloud<PointT>::Ptr cloud2)

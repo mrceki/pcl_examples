@@ -61,6 +61,17 @@ conditional_removal:
     limit_max: 0.8
   # keep_organized: true
 
+color_filter:
+  - color: r
+    limit_min: 0.0
+    limit_max: 100.0
+  - color: g
+    limit_min: 0.0
+    limit_max: 100.0
+  - color: b
+    limit_min: 0.0
+    limit_max: 100.0
+    
 statistical_outlier_removal:
   mean_k: 50
   stddev_mul_thresh: 1.0
