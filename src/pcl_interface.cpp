@@ -40,6 +40,7 @@ void PointCloudInterface::setParametersFromYAML(PointCloudInterface::Parameters 
 
         auto parseFilterFields = [&](const YAML::Node &node, std::vector<PointCloudInterface::FilterField> &fields)
         {
+            fields.clear(); 
             for (const auto &config : node)
             {
                 fields.push_back({config["field"].as<std::string>(),
@@ -96,11 +97,12 @@ void PointCloudInterface::setParametersFromYAML(PointCloudInterface::Parameters 
         params.ror_params.min_neighbors_in_radius = config["radius_outlier_removal"]["min_neighbors_in_radius"].as<int>();
         params.ror_params.keep_organized = config["radius_outlier_removal"]["keep_organized"].as<bool>();
 
-        auto parseColorFilterParams = [&](const YAML::Node &node, std::vector<PointCloudInterface::ColorParams> &paramsVector)
+        auto parseColorFilterParams = [&](const YAML::Node &node, std::vector<PointCloudInterface::ColorParams> &color_params)
         {
+            color_params.clear();
             for (const auto &config : node)
             {
-                paramsVector.push_back({config["color"].as<std::string>(),
+                color_params.push_back({config["color"].as<std::string>(),
                                         config["limit_min"].as<float>(),
                                         config["limit_max"].as<float>()});
             }
