@@ -263,6 +263,22 @@ void PointCloudInterface::momentOfInertia(pcl::PointCloud<PointT>::Ptr point_clo
     feature_extractor.getEigenValues(params.major_value, params.middle_value, params.minor_value);
     feature_extractor.getEigenVectors(params.major_vector, params.middle_vector, params.minor_vector);
     feature_extractor.getMassCenter(params.mass_center);
+    float x_dimension = calculateDistance(params.max_point_AABB.x - params.min_point_AABB.x, params.max_point_AABB.y - params.min_point_AABB.y);
+    float y_dimension = params.max_point_AABB.z - params.min_point_AABB.z;
+    std::cout << "x_dimension: " << x_dimension << std::endl;
+    std::cout << "y_dimension: " << y_dimension << std::endl;
+    if(x_dimension < 0.2 && y_dimension < 0.5 && y_dimension > 0.15)    
+    {
+        if(x_dimension*y_dimension > 0.1) 
+        {
+            point_cloud->clear();
+        }
+    }
+    else
+    {
+        point_cloud->clear();
+    }
+
 }
 
 void PointCloudInterface::passthroughFilterCloud(pcl::PointCloud<PointT>::Ptr point_cloud, FilterParams &params)
@@ -315,8 +331,8 @@ void PointCloudInterface::colorFilter(pcl::PointCloud<PointT>::Ptr point_cloud, 
     pcl::ConditionAnd<PointT>::Ptr color_cond(new pcl::ConditionAnd<PointT>());
     for (auto field : params.color_filter_params.color_params)
     {
-        pcl::PackedRGBComparison<PointT>::ConstPtr color_comp_gt(new pcl::PackedRGBComparison<PointT>(field.color, pcl::ComparisonOps::GT, field.limit_min));
-        pcl::PackedRGBComparison<PointT>::ConstPtr color_comp_lt(new pcl::PackedRGBComparison<PointT>(field.color, pcl::ComparisonOps::LT, field.limit_max));
+        pcl::PackedRGBComparison<PointT>::ConstPtr color_comp_gt(new pcl::PackedRGBComparison<PointT>(field.color, pcl::ComparisonOps::GT, field.limit_max));
+        pcl::PackedRGBComparison<PointT>::ConstPtr color_comp_lt(new pcl::PackedRGBComparison<PointT>(field.color, pcl::ComparisonOps::LT, field.limit_min));
         color_cond->addComparison(color_comp_gt);
         color_cond->addComparison(color_comp_lt);
     }

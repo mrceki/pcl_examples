@@ -102,9 +102,9 @@ private:
         pcl_conversions::toPCL(*cloud_msg, pcl_pc2);
         pcl::fromPCLPointCloud2(pcl_pc2, *pcl_.cloud);
 
-        double theta_x = M_PI / 2.0; 
-        double theta_y = M_PI / 2.0; 
-        double theta_z = M_PI / 1.0; 
+        double theta_x = M_PI / 2.0;
+        double theta_y = M_PI / 2.0;
+        double theta_z = M_PI / 1.0;
         transform = Eigen::Affine3f::Identity();
         transform.rotate(Eigen::AngleAxisf(theta_x, Eigen::Vector3f::UnitX()));
         transform.rotate(Eigen::AngleAxisf(theta_y, Eigen::Vector3f::UnitY()));
@@ -113,7 +113,8 @@ private:
 
         pcl_.passthroughFilterCloud(pcl_.cloud, params_.filter_params);
         pcl_.downsample(pcl_.cloud, params_.downsample_leaf_size);
-        pcl_.segmentPlane(pcl_.cloud, params_.sac_params);
+        // pcl_.colorFilter(pcl_.cloud, params_);
+        // pcl_.segmentPlane(pcl_.cloud, params_.sac_params);
         // pcl_.regionGrowing(pcl_.cloud, params_.region_growing_params);
         pcl_.extractClusters(pcl_.cloud, params_.ec_params);
         pcl_.createNewCloudFromIndicies(pcl_.cluster_indices, pcl_.cloud_cluster, params_.sac_params.min_indices);
@@ -128,22 +129,25 @@ private:
             transformTf.setOrigin(tf::Vector3(cluster->points[0].x, cluster->points[0].y, cluster->points[0].z));
             q.setRPY(0, 0, 0);
             transformTf.setRotation(q);
-            *pcl_.ros_cloud += *cluster;
-            cluster_frame_name = "cluster_frame_" + std::to_string(i);
-            tf::StampedTransform stampedTransform(transformTf, ros::Time::now(), "camera_link", cluster_frame_name);
-            tf_transforms.push_back(stampedTransform);
-            pose_array.header.frame_id = "camera_link";
-            pose_array.header.stamp = ros::Time::now();
-            geometry_msgs::Pose pose;
-            pose.position.x = cluster->points[0].x;
-            pose.position.y = cluster->points[0].y;
-            pose.position.z = cluster->points[0].z;
-            pose.orientation.x = 0;
-            pose.orientation.y = 0;
-            pose.orientation.z = 0;
-            pose.orientation.w = 1;
-            pose_array.poses.push_back(pose);
-            i++;
+            if (cluster->size() > 0)
+            {
+                *pcl_.ros_cloud += *cluster;
+                cluster_frame_name = "cluster_frame_" + std::to_string(i);
+                tf::StampedTransform stampedTransform(transformTf, ros::Time::now(), "camera_link", cluster_frame_name);
+                tf_transforms.push_back(stampedTransform);
+                pose_array.header.frame_id = "camera_link";
+                pose_array.header.stamp = ros::Time::now();
+                geometry_msgs::Pose pose;
+                pose.position.x = cluster->points[0].x;
+                pose.position.y = cluster->points[0].y;
+                pose.position.z = cluster->points[0].z;
+                pose.orientation.x = 0;
+                pose.orientation.y = 0;
+                pose.orientation.z = 0;
+                pose.orientation.w = 1;
+                pose_array.poses.push_back(pose);
+                i++;
+            }
         }
         dolly_srv.request.cluster_poses = pose_array;
 
